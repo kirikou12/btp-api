@@ -4,6 +4,7 @@ import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.project.ConstructionStage;
+import mr.btp.api.project.StageStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +60,9 @@ public class MaterialConsumptionService {
         ConstructionStage stage = referenceDataService.getStage(request.stageId());
         if (!stage.getProject().getId().equals(request.projectId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
+        }
+        if (stage.getStatus() == StageStatus.COMPLETED) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record consumption on a completed stage");
         }
         if (!invoiceItem.getCategory().getId().equals(request.categoryId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Consumption category must match the invoice item category");

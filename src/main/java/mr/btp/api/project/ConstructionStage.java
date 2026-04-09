@@ -20,6 +20,10 @@ public class ConstructionStage extends BaseEntity {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stage_template_id")
+    private StageTemplate stageTemplate;
+
     @Column(nullable = false)
     private String name;
 
@@ -39,12 +43,23 @@ public class ConstructionStage extends BaseEntity {
     @Column(name = "planned_budget", precision = 19, scale = 2)
     private BigDecimal plannedBudget;
 
+    @Column(name = "progress_percent", nullable = false)
+    private Integer progressPercent = 0;
+
     public Project getProject() {
         return project;
     }
 
     public void setProject(Project project) {
         this.project = project;
+    }
+
+    public StageTemplate getStageTemplate() {
+        return stageTemplate;
+    }
+
+    public void setStageTemplate(StageTemplate stageTemplate) {
+        this.stageTemplate = stageTemplate;
     }
 
     public String getName() {
@@ -93,5 +108,13 @@ public class ConstructionStage extends BaseEntity {
 
     public void setPlannedBudget(BigDecimal plannedBudget) {
         this.plannedBudget = plannedBudget;
+    }
+
+    public Integer getProgressPercent() {
+        return progressPercent;
+    }
+
+    public void setProgressPercent(Integer progressPercent) {
+        this.progressPercent = progressPercent;
     }
 }

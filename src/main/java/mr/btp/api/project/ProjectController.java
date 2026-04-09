@@ -3,7 +3,6 @@ package mr.btp.api.project;
 import jakarta.validation.Valid;
 import java.util.List;
 import mr.btp.api.common.dto.PageResponse;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,28 +42,13 @@ public class ProjectController {
         return projectService.update(id, request);
     }
 
-    @DeleteMapping("/api/projects/{id}")
-    public void delete(@PathVariable Long id) {
-        projectService.delete(id);
-    }
-
     @GetMapping("/api/projects/{id}/stages")
     public List<ProjectDtos.StageResponse> listStages(@PathVariable Long id) {
         return projectService.listStages(id);
     }
 
-    @PostMapping("/api/projects/{id}/stages")
-    public ProjectDtos.StageResponse createStage(@PathVariable Long id, @Valid @RequestBody ProjectDtos.StageRequest request) {
-        return projectService.createStage(id, request);
-    }
-
-    @PutMapping("/api/stages/{id}")
+    @PutMapping("/api/project-stages/{id}")
     public ProjectDtos.StageResponse updateStage(@PathVariable Long id, @Valid @RequestBody ProjectDtos.StageRequest request) {
         return projectService.updateStage(id, request);
-    }
-
-    @DeleteMapping("/api/stages/{id}")
-    public void deleteStage(@PathVariable Long id) {
-        projectService.deleteStage(id);
     }
 }

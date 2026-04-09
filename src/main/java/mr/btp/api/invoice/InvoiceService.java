@@ -1,5 +1,6 @@
 package mr.btp.api.invoice;
 
+import mr.btp.api.category.CategoryType;
 import mr.btp.api.common.dto.PageResponse;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
@@ -90,6 +91,7 @@ public class InvoiceService {
         invoice.setTotalAmount(request.totalAmount());
         invoice.setCurrency(request.currency().trim().toUpperCase());
         invoice.setNotes(request.notes());
+        invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
         invoice.setStatus(request.status());
     }
 
@@ -107,6 +109,9 @@ public class InvoiceService {
     }
 
     private void applyItem(SupplierInvoiceItem item, InvoiceDtos.InvoiceItemUpsertRequest request) {
+        if (referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.MATERIAL) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier advance items must use a material category");
+        }
         item.setCategory(referenceDataService.getCategory(request.categoryId()));
         item.setDescription(request.description().trim());
         item.setQuantity(request.quantity());
@@ -139,6 +144,7 @@ public class InvoiceService {
                 invoice.getTotalAmount(),
                 invoice.getCurrency(),
                 invoice.getNotes(),
+                invoice.getDocumentRef(),
                 invoice.getStatus().name(),
                 consumedAmount,
                 invoice.getTotalAmount().subtract(consumedAmount),

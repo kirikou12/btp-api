@@ -1,8 +1,10 @@
 package mr.btp.api.expense;
 
+import mr.btp.api.category.CategoryType;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
+import mr.btp.api.project.StageStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,11 +59,19 @@ public class DirectExpenseService {
         if (stage != null && !stage.getProject().getId().equals(request.projectId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the same project");
         }
+        if (stage != null && stage.getStatus() == StageStatus.COMPLETED) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record a direct expense on a completed stage");
+        }
+        if (request.subCategory() != null && !request.subCategory().isBlank() && referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.LABOR) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Sub-category is only allowed for labor expenses");
+        }
         expense.setStage(stage);
         expense.setCategory(referenceDataService.getCategory(request.categoryId()));
         expense.setSupplier(request.supplierId() == null ? null : referenceDataService.getSupplier(request.supplierId()));
         expense.setAmount(request.amount());
         expense.setDescription(request.description().trim());
+        expense.setSubCategory(request.subCategory() == null || request.subCategory().isBlank() ? null : request.subCategory().trim());
+        expense.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
         expense.setExpenseDate(request.expenseDate());
     }
 
@@ -75,6 +85,8 @@ public class DirectExpenseService {
                 expense.getCategory().getName(),
                 expense.getAmount(),
                 expense.getDescription(),
+                expense.getSubCategory(),
+                expense.getDocumentRef(),
                 expense.getExpenseDate()
         );
     }

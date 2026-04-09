@@ -1,27 +1,28 @@
 package mr.btp.api.project;
 
-import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
+import java.math.BigDecimal;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ConstructionStageRepository stageRepository;
+    private final StageTemplateRepository stageTemplateRepository;
     private final ReferenceDataService referenceDataService;
 
     public ProjectService(ProjectRepository projectRepository,
                           ConstructionStageRepository stageRepository,
+                          StageTemplateRepository stageTemplateRepository,
                           ReferenceDataService referenceDataService) {
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
+        this.stageTemplateRepository = stageTemplateRepository;
         this.referenceDataService = referenceDataService;
     }
 
@@ -37,7 +38,9 @@ public class ProjectService {
     public ProjectDtos.ProjectResponse create(ProjectDtos.ProjectRequest request) {
         Project project = new Project();
         apply(project, request);
-        return toResponse(projectRepository.save(project));
+        Project saved = projectRepository.save(project);
+        createStagesFromActiveTemplates(saved);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -49,9 +52,7 @@ public class ProjectService {
 
     @Transactional
     public void delete(Long id) {
-        if (!projectRepository.existsById(id)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Project not found");
-        }
+        referenceDataService.getProject(id);
         projectRepository.deleteById(id);
     }
 
@@ -61,26 +62,10 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectDtos.StageResponse createStage(Long projectId, ProjectDtos.StageRequest request) {
-        ConstructionStage stage = new ConstructionStage();
-        stage.setProject(referenceDataService.getProject(projectId));
-        apply(stage, request);
-        return toStageResponse(stageRepository.save(stage));
-    }
-
-    @Transactional
     public ProjectDtos.StageResponse updateStage(Long stageId, ProjectDtos.StageRequest request) {
         ConstructionStage stage = referenceDataService.getStage(stageId);
         apply(stage, request);
         return toStageResponse(stageRepository.save(stage));
-    }
-
-    @Transactional
-    public void deleteStage(Long stageId) {
-        if (!stageRepository.existsById(stageId)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Stage not found");
-        }
-        stageRepository.deleteById(stageId);
     }
 
     private void apply(Project project, ProjectDtos.ProjectRequest request) {
@@ -90,16 +75,29 @@ public class ProjectService {
         project.setStartDate(request.startDate());
         project.setEstimatedSalePrice(request.estimatedSalePrice());
         project.setBudget(request.budget());
-        project.setStatus(request.status());
+        project.setStatus(request.status() == null ? ProjectStatus.PLANNING : request.status());
     }
 
     private void apply(ConstructionStage stage, ProjectDtos.StageRequest request) {
-        stage.setName(request.name().trim());
-        stage.setSortOrder(request.sortOrder());
         stage.setStatus(request.status());
         stage.setStartDate(request.startDate());
         stage.setEndDate(request.endDate());
         stage.setPlannedBudget(request.plannedBudget());
+        stage.setProgressPercent(request.progressPercent() == null ? stage.getProgressPercent() : request.progressPercent());
+    }
+
+    private void createStagesFromActiveTemplates(Project project) {
+        List<StageTemplate> templates = stageTemplateRepository.findByActiveTrueOrderBySortOrderAsc();
+        for (StageTemplate template : templates) {
+            ConstructionStage stage = new ConstructionStage();
+            stage.setProject(project);
+            stage.setStageTemplate(template);
+            stage.setName(template.getName());
+            stage.setSortOrder(template.getSortOrder());
+            stage.setStatus(StageStatus.NOT_STARTED);
+            stage.setProgressPercent(0);
+            stageRepository.save(stage);
+        }
     }
 
     private ProjectDtos.ProjectResponse toResponse(Project project) {
@@ -121,12 +119,15 @@ public class ProjectService {
         return new ProjectDtos.StageResponse(
                 stage.getId(),
                 stage.getProject().getId(),
+                stage.getStageTemplate() == null ? null : stage.getStageTemplate().getId(),
                 stage.getName(),
                 stage.getSortOrder(),
                 stage.getStatus().name(),
                 stage.getStartDate(),
                 stage.getEndDate(),
-                stage.getPlannedBudget()
+                stage.getPlannedBudget(),
+                referenceDataService.stageActualCost(stage.getId()),
+                stage.getProgressPercent()
         );
     }
 }

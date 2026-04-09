@@ -22,6 +22,8 @@ import mr.btp.api.project.Project;
 import mr.btp.api.project.ProjectRepository;
 import mr.btp.api.project.ProjectStatus;
 import mr.btp.api.project.StageStatus;
+import mr.btp.api.project.StageTemplate;
+import mr.btp.api.project.StageTemplateRepository;
 import mr.btp.api.supplier.Supplier;
 import mr.btp.api.supplier.SupplierRepository;
 import mr.btp.api.user.User;
@@ -43,6 +45,7 @@ public class DemoDataInitializer {
                                    ExpenseCategoryRepository categoryRepository,
                                    ProjectRepository projectRepository,
                                    ConstructionStageRepository stageRepository,
+                                   StageTemplateRepository stageTemplateRepository,
                                    SupplierRepository supplierRepository,
                                    SupplierInvoiceRepository invoiceRepository,
                                    SupplierInvoiceItemRepository invoiceItemRepository,
@@ -82,6 +85,9 @@ public class DemoDataInitializer {
                 "Transport, crane moves, and site deliveries");
 
             LocalDate today = LocalDate.now();
+            Map<String, StageTemplate> stageTemplates = new LinkedHashMap<>();
+            stageTemplateRepository.findAllByOrderBySortOrderAsc()
+                    .forEach(template -> stageTemplates.put(template.getName().toLowerCase(), template));
 
             Project villaHorizon = saveProject(projectRepository,
                 "Villa Horizon",
@@ -92,14 +98,14 @@ public class DemoDataInitializer {
                 "130000.00",
                 ProjectStatus.IN_PROGRESS);
 
-            Map<String, ConstructionStage> villaStages = seedStages(stageRepository, villaHorizon,
-                stageSpec("Foundation", 1, StageStatus.COMPLETED, "25000.00"),
-                stageSpec("Elevation", 2, StageStatus.IN_PROGRESS, "30000.00"),
-                stageSpec("Roofing", 3, StageStatus.NOT_STARTED, "18000.00"),
-                stageSpec("Plumbing", 4, StageStatus.NOT_STARTED, "12000.00"),
-                stageSpec("Electricity", 5, StageStatus.NOT_STARTED, "10000.00"),
-                stageSpec("Painting", 6, StageStatus.NOT_STARTED, "9000.00"),
-                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "15000.00"));
+            Map<String, ConstructionStage> villaStages = seedStages(stageRepository, stageTemplates, villaHorizon,
+                stageSpec("Foundation", 1, StageStatus.COMPLETED, "25000.00", 100),
+                stageSpec("Elevation", 2, StageStatus.IN_PROGRESS, "30000.00", 48),
+                stageSpec("Roofing", 3, StageStatus.NOT_STARTED, "18000.00", 0),
+                stageSpec("Plumbing", 4, StageStatus.NOT_STARTED, "12000.00", 0),
+                stageSpec("Electricity", 5, StageStatus.NOT_STARTED, "10000.00", 0),
+                stageSpec("Painting", 6, StageStatus.NOT_STARTED, "9000.00", 0),
+                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "15000.00", 0));
 
             Project palmResidence = saveProject(projectRepository,
                 "Palm Residence",
@@ -110,14 +116,14 @@ public class DemoDataInitializer {
                 "175000.00",
                 ProjectStatus.IN_PROGRESS);
 
-            Map<String, ConstructionStage> palmStages = seedStages(stageRepository, palmResidence,
-                stageSpec("Foundation", 1, StageStatus.COMPLETED, "32000.00"),
-                stageSpec("Elevation", 2, StageStatus.COMPLETED, "36000.00"),
-                stageSpec("Roofing", 3, StageStatus.COMPLETED, "22000.00"),
-                stageSpec("Plumbing", 4, StageStatus.COMPLETED, "18000.00"),
-                stageSpec("Electricity", 5, StageStatus.IN_PROGRESS, "16000.00"),
-                stageSpec("Painting", 6, StageStatus.IN_PROGRESS, "14000.00"),
-                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "17000.00"));
+            Map<String, ConstructionStage> palmStages = seedStages(stageRepository, stageTemplates, palmResidence,
+                stageSpec("Foundation", 1, StageStatus.COMPLETED, "32000.00", 100),
+                stageSpec("Elevation", 2, StageStatus.COMPLETED, "36000.00", 100),
+                stageSpec("Roofing", 3, StageStatus.COMPLETED, "22000.00", 100),
+                stageSpec("Plumbing", 4, StageStatus.COMPLETED, "18000.00", 100),
+                stageSpec("Electricity", 5, StageStatus.IN_PROGRESS, "16000.00", 60),
+                stageSpec("Painting", 6, StageStatus.IN_PROGRESS, "14000.00", 35),
+                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "17000.00", 0));
 
             Project depotExtension = saveProject(projectRepository,
                 "Depot Extension",
@@ -128,12 +134,12 @@ public class DemoDataInitializer {
                 "84000.00",
                 ProjectStatus.IN_PROGRESS);
 
-            Map<String, ConstructionStage> depotStages = seedStages(stageRepository, depotExtension,
-                stageSpec("Foundation", 1, StageStatus.COMPLETED, "16000.00"),
-                stageSpec("Steel Structure", 2, StageStatus.IN_PROGRESS, "24000.00"),
-                stageSpec("Roofing", 3, StageStatus.NOT_STARTED, "15000.00"),
-                stageSpec("Masonry", 4, StageStatus.NOT_STARTED, "12000.00"),
-                stageSpec("Finishing", 5, StageStatus.NOT_STARTED, "9000.00"));
+            Map<String, ConstructionStage> depotStages = seedStages(stageRepository, stageTemplates, depotExtension,
+                stageSpec("Foundation", 1, StageStatus.COMPLETED, "16000.00", 100),
+                stageSpec("Elevation", 2, StageStatus.IN_PROGRESS, "24000.00", 42),
+                stageSpec("Roofing", 3, StageStatus.NOT_STARTED, "15000.00", 0),
+                stageSpec("Painting", 6, StageStatus.NOT_STARTED, "12000.00", 0),
+                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "9000.00", 0));
 
             SupplierInvoice villaInvoice1 = saveInvoice(invoiceRepository, atlas, villaHorizon,
                 "INV-2026-001", today.minusMonths(2).minusDays(3), "5000.00", "Bulk cement and steel purchase");
@@ -163,11 +169,6 @@ public class DemoDataInitializer {
             SupplierInvoiceItem depotSteel = saveInvoiceItem(invoiceItemRepository, depotInvoice1, categories.get("Steel"),
                 "IPE beams and steel bars", "1.00", "lot", "6400.00", "6400.00");
 
-            SupplierInvoice depotInvoice2 = saveInvoice(invoiceRepository, transit, depotExtension,
-                "INV-2026-041", today.minusDays(12), "1800.00", "On-site crane and transport allocation");
-            SupplierInvoiceItem depotLogistics = saveInvoiceItem(invoiceItemRepository, depotInvoice2, categories.get("Transport"),
-                "Crane and heavy delivery package", "1.00", "service", "1800.00", "1800.00");
-
             saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Foundation"), villaCement, categories.get("Cement"),
                 "25.00", "500.00", today.minusDays(48), "Foundation slab concrete");
             saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Foundation"), villaSteel, categories.get("Steel"),
@@ -188,10 +189,8 @@ public class DemoDataInitializer {
             saveConsumption(consumptionRepository, palmResidence, palmStages.get("Roofing"), palmWaterproof, categories.get("Waterproofing"),
                 "12.00", "1200.00", today.minusDays(70), "Roof terrace membrane");
 
-            saveConsumption(consumptionRepository, depotExtension, depotStages.get("Steel Structure"), depotSteel, categories.get("Steel"),
+            saveConsumption(consumptionRepository, depotExtension, depotStages.get("Elevation"), depotSteel, categories.get("Steel"),
                 "0.55", "3520.00", today.minusDays(9), "Main frame assembly");
-            saveConsumption(consumptionRepository, depotExtension, depotStages.get("Steel Structure"), depotLogistics, categories.get("Transport"),
-                "0.50", "900.00", today.minusDays(8), "Crane package used for steel erection");
 
             saveExpense(expenseRepository, villaHorizon, villaStages.get("Foundation"), categories.get("Labor"), null,
                 "2200.00", "Foundation labor team", today.minusDays(49));
@@ -211,10 +210,12 @@ public class DemoDataInitializer {
 
             saveExpense(expenseRepository, depotExtension, depotStages.get("Foundation"), categories.get("Labor"), null,
                 "1450.00", "Concrete crew", today.minusDays(27));
-            saveExpense(expenseRepository, depotExtension, depotStages.get("Steel Structure"), categories.get("Labor"), null,
+            saveExpense(expenseRepository, depotExtension, depotStages.get("Elevation"), categories.get("Labor"), null,
                 "2100.00", "Steel installers", today.minusDays(8));
-            saveExpense(expenseRepository, depotExtension, depotStages.get("Steel Structure"), categories.get("Equipment Rental"), transit,
+            saveExpense(expenseRepository, depotExtension, depotStages.get("Elevation"), categories.get("Equipment Rental"), transit,
                 "950.00", "Welding generator rental", today.minusDays(7));
+            saveExpense(expenseRepository, depotExtension, depotStages.get("Elevation"), categories.get("Transport"), transit,
+                "700.00", "Steel delivery and crane move", today.minusDays(8));
         };
     }
 
@@ -254,23 +255,27 @@ public class DemoDataInitializer {
     }
 
     private Map<String, ConstructionStage> seedStages(ConstructionStageRepository repository,
+                                                      Map<String, StageTemplate> stageTemplates,
                                                       Project project,
                                                       StageSeed... specs) {
         Map<String, ConstructionStage> stages = new LinkedHashMap<>();
         for (StageSeed spec : specs) {
-            stages.put(spec.name(), saveStage(repository, project, spec.name(), spec.order(), spec.status(), amount(spec.plannedBudget())));
+            stages.put(spec.name(), saveStage(repository, stageTemplates, project, spec.name(), spec.order(), spec.status(), amount(spec.plannedBudget()), spec.progressPercent()));
         }
         return stages;
     }
 
     private ConstructionStage saveStage(ConstructionStageRepository repository,
+                                        Map<String, StageTemplate> stageTemplates,
                                         Project project,
                                         String name,
                                         int order,
                                         StageStatus status,
-                                        BigDecimal plannedBudget) {
+                                        BigDecimal plannedBudget,
+                                        int progressPercent) {
         ConstructionStage stage = new ConstructionStage();
         stage.setProject(project);
+        stage.setStageTemplate(stageTemplates.get(name.toLowerCase()));
         stage.setName(name);
         stage.setSortOrder(order);
         stage.setStatus(status);
@@ -279,6 +284,7 @@ public class DemoDataInitializer {
             stage.setEndDate(project.getStartDate().plusWeeks(order * 2L + 1));
         }
         stage.setPlannedBudget(plannedBudget);
+        stage.setProgressPercent(progressPercent);
         return repository.save(stage);
     }
 
@@ -383,14 +389,14 @@ public class DemoDataInitializer {
         return repository.save(category);
     }
 
-    private StageSeed stageSpec(String name, int order, StageStatus status, String plannedBudget) {
-        return new StageSeed(name, order, status, plannedBudget);
+    private StageSeed stageSpec(String name, int order, StageStatus status, String plannedBudget, int progressPercent) {
+        return new StageSeed(name, order, status, plannedBudget, progressPercent);
     }
 
     private BigDecimal amount(String value) {
         return new BigDecimal(value);
     }
 
-    private record StageSeed(String name, int order, StageStatus status, String plannedBudget) {
+    private record StageSeed(String name, int order, StageStatus status, String plannedBudget, int progressPercent) {
     }
 }

@@ -23,6 +23,7 @@ public final class InvoiceDtos {
             @NotNull @DecimalMin("0.00") BigDecimal totalAmount,
             @NotBlank String currency,
             String notes,
+            String documentRef,
             @NotNull InvoiceStatus status,
             @Valid @NotEmpty List<InvoiceItemUpsertRequest> items
     ) {
@@ -38,6 +39,7 @@ public final class InvoiceDtos {
             BigDecimal totalAmount,
             String currency,
             String notes,
+            String documentRef,
             String status,
             BigDecimal consumedAmount,
             BigDecimal remainingAmount,

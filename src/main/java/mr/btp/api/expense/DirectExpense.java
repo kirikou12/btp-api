@@ -40,6 +40,12 @@ public class DirectExpense extends BaseEntity {
     @Column(nullable = false)
     private String description;
 
+    @Column(name = "sub_category")
+    private String subCategory;
+
+    @Column(name = "document_ref", length = 500)
+    private String documentRef;
+
     @Column(name = "expense_date", nullable = false)
     private LocalDate expenseDate;
 
@@ -89,6 +95,22 @@ public class DirectExpense extends BaseEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getSubCategory() {
+        return subCategory;
+    }
+
+    public void setSubCategory(String subCategory) {
+        this.subCategory = subCategory;
+    }
+
+    public String getDocumentRef() {
+        return documentRef;
+    }
+
+    public void setDocumentRef(String documentRef) {
+        this.documentRef = documentRef;
     }
 
     public LocalDate getExpenseDate() {

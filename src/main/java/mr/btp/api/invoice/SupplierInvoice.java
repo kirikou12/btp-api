@@ -40,6 +40,9 @@ public class SupplierInvoice extends BaseEntity {
     @Column(columnDefinition = "text")
     private String notes;
 
+    @Column(name = "document_ref", length = 500)
+    private String documentRef;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private InvoiceStatus status;
@@ -98,6 +101,14 @@ public class SupplierInvoice extends BaseEntity {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getDocumentRef() {
+        return documentRef;
+    }
+
+    public void setDocumentRef(String documentRef) {
+        this.documentRef = documentRef;
     }
 
     public InvoiceStatus getStatus() {
