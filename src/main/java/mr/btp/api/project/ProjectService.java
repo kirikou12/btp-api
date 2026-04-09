@@ -1,10 +1,12 @@
 package mr.btp.api.project;
 
+import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +28,12 @@ public class ProjectService {
         this.referenceDataService = referenceDataService;
     }
 
+    @Transactional(readOnly = true)
     public Page<ProjectDtos.ProjectResponse> list(int page, int size) {
         return projectRepository.findAll(PageRequest.of(page, size)).map(this::toResponse);
     }
 
+    @Transactional(readOnly = true)
     public ProjectDtos.ProjectResponse get(Long id) {
         return toResponse(referenceDataService.getProject(id));
     }
@@ -56,6 +60,7 @@ public class ProjectService {
         projectRepository.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
     public List<ProjectDtos.StageResponse> listStages(Long projectId) {
         referenceDataService.getProject(projectId);
         return referenceDataService.stagesByProject(projectId).stream().map(this::toStageResponse).toList();
@@ -79,10 +84,24 @@ public class ProjectService {
     }
 
     private void apply(ConstructionStage stage, ProjectDtos.StageRequest request) {
+        if (request.startDate() != null && request.endDate() != null && request.endDate().isBefore(request.startDate())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage end date cannot be before start date");
+        }
         stage.setStatus(request.status());
         stage.setStartDate(request.startDate());
         stage.setEndDate(request.endDate());
         stage.setPlannedBudget(request.plannedBudget());
+
+        if (request.status() == StageStatus.NOT_STARTED) {
+            stage.setProgressPercent(0);
+            return;
+        }
+
+        if (request.status() == StageStatus.COMPLETED) {
+            stage.setProgressPercent(100);
+            return;
+        }
+
         stage.setProgressPercent(request.progressPercent() == null ? stage.getProgressPercent() : request.progressPercent());
     }
 

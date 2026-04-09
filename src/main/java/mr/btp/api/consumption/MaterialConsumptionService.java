@@ -24,11 +24,13 @@ public class MaterialConsumptionService {
         this.referenceDataService = referenceDataService;
     }
 
+    @Transactional(readOnly = true)
     public List<ConsumptionDtos.ConsumptionResponse> byProject(Long projectId) {
         referenceDataService.getProject(projectId);
         return referenceDataService.consumptionsByProject(projectId).stream().map(this::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
     public ConsumptionDtos.ConsumptionResponse get(Long id) {
         return toResponse(referenceDataService.getConsumption(id));
     }

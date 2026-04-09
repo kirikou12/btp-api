@@ -8,6 +8,7 @@ import mr.btp.api.project.Project;
 import mr.btp.api.project.ProjectRepository;
 import mr.btp.api.project.ProjectStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
@@ -29,6 +30,7 @@ public class DashboardService {
         this.referenceDataService = referenceDataService;
     }
 
+    @Transactional(readOnly = true)
     public DashboardDtos.DashboardResponse global() {
         BigDecimal totalBudget = projectRepository.findAll().stream().map(Project::getBudget).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal estimatedSale = projectRepository.findAll().stream().map(Project::getEstimatedSalePrice).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -47,6 +49,7 @@ public class DashboardService {
         );
     }
 
+    @Transactional(readOnly = true)
     public DashboardDtos.DashboardResponse byProject(Long projectId) {
         Project project = referenceDataService.getProject(projectId);
         BigDecimal direct = referenceDataService.expensesByProject(projectId).stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);

@@ -22,11 +22,13 @@ public class DirectExpenseService {
         this.referenceDataService = referenceDataService;
     }
 
+    @Transactional(readOnly = true)
     public List<ExpenseDtos.ExpenseResponse> byProject(Long projectId) {
         referenceDataService.getProject(projectId);
         return referenceDataService.expensesByProject(projectId).stream().map(this::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
     public ExpenseDtos.ExpenseResponse get(Long id) {
         return toResponse(referenceDataService.getExpense(id));
     }

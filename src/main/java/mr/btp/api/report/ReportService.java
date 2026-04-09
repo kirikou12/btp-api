@@ -2,8 +2,8 @@ package mr.btp.api.report;
 
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.invoice.SupplierInvoice;
-import mr.btp.api.invoice.SupplierInvoiceItem;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -21,6 +21,7 @@ public class ReportService {
         this.referenceDataService = referenceDataService;
     }
 
+    @Transactional(readOnly = true)
     public List<ReportDtos.StageCostRow> stageCosts(Long projectId) {
         Map<Long, BigDecimal> totals = new LinkedHashMap<>();
         referenceDataService.stagesByProject(projectId).forEach(stage -> totals.put(stage.getId(), BigDecimal.ZERO));
@@ -37,6 +38,7 @@ public class ReportService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<ReportDtos.CategoryCostRow> categoryCosts(Long projectId) {
         Map<Long, ReportDtos.CategoryCostRow> rows = new LinkedHashMap<>();
         referenceDataService.expensesByProject(projectId).forEach(expense -> rows.merge(
@@ -52,6 +54,7 @@ public class ReportService {
         return new ArrayList<>(rows.values());
     }
 
+    @Transactional(readOnly = true)
     public List<ReportDtos.SupplierBalanceRow> supplierBalances(Long projectId) {
         Map<Long, ReportDtos.SupplierBalanceRow> rows = new LinkedHashMap<>();
         List<SupplierInvoice> invoices = referenceDataService.invoicesByProject(projectId);
@@ -72,6 +75,7 @@ public class ReportService {
         return new ArrayList<>(rows.values());
     }
 
+    @Transactional(readOnly = true)
     public List<ReportDtos.ActivityFeedRow> activityFeed(Long projectId) {
         List<ReportDtos.ActivityFeedRow> rows = new ArrayList<>();
         referenceDataService.expensesByProject(projectId).forEach(expense -> rows.add(

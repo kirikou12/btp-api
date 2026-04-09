@@ -1,6 +1,8 @@
 package mr.btp.api.project;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -42,8 +44,8 @@ public final class ProjectDtos {
             @NotNull StageStatus status,
             LocalDate startDate,
             LocalDate endDate,
-            BigDecimal plannedBudget,
-            Integer progressPercent
+            @DecimalMin("0.00") BigDecimal plannedBudget,
+            @Min(0) @Max(100) Integer progressPercent
     ) {
     }
 
