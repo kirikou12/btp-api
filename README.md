@@ -7,6 +7,7 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, suppli
 - JWT auth with register, login, and `me`
 - CRUD endpoints for projects, stage templates, project stages, categories, suppliers, expenses, invoices, and consumptions
 - Business rules for invoice reconciliation and over-consumption prevention
+- Local image upload endpoint for chantier receipts and supplier invoice photos
 - Flyway database migration
 - Demo seed data
 - Swagger UI at `/swagger-ui.html`
@@ -34,6 +35,13 @@ Demo login:
 
 - default/dev: H2 in PostgreSQL mode
 - `prod`: PostgreSQL using `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`
+
+## Document uploads
+
+- `POST /api/uploads/images` accepts a multipart image file named `file`
+- Uploaded files are stored locally under `APP_DOCUMENTS_UPLOAD_DIR`
+- If `APP_DOCUMENTS_UPLOAD_DIR` is not set, the API uses `./data/uploads`
+- Saved records keep the returned path such as `/api/uploads/<generated-file-name>`
 
 ## Core business rules
 

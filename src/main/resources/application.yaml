@@ -40,6 +40,8 @@ app:
   security:
     jwt-secret: 0123456789012345678901234567890101234567890123456789012345678901
     jwt-expiration-minutes: 480
+  documents:
+    upload-dir: ${APP_DOCUMENTS_UPLOAD_DIR:./data/uploads}
 
 ---
 spring:

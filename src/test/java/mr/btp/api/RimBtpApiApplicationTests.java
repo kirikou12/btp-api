@@ -1,5 +1,6 @@
 package mr.btp.api;
 
+import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.consumption.ConsumptionDtos;
 import mr.btp.api.consumption.MaterialConsumptionService;
 import mr.btp.api.expense.DirectExpenseService;
@@ -7,11 +8,14 @@ import mr.btp.api.expense.ExpenseDtos;
 import mr.btp.api.invoice.InvoiceDtos;
 import mr.btp.api.invoice.InvoiceService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -111,5 +115,21 @@ class RimBtpApiApplicationTests {
 
         assertThat(updatedConsumption.amountUsed()).isEqualByComparingTo("450.00");
         assertThat(updatedConsumption.notes()).contains("corrected");
+    }
+
+    @Test
+    void shouldStoreAndLoadUploadedDocument(@TempDir Path tempDirectory) {
+        DocumentStorageService documentStorageService = new DocumentStorageService(tempDirectory.toString());
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "proof.jpg",
+                "image/jpeg",
+                new byte[]{1, 2, 3, 4}
+        );
+
+        DocumentStorageService.DocumentUploadResponse uploaded = documentStorageService.storeImage(file);
+
+        assertThat(uploaded.path()).startsWith("/api/uploads/");
+        assertThat(documentStorageService.load(uploaded.fileName()).exists()).isTrue();
     }
 }
