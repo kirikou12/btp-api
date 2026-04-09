@@ -19,7 +19,7 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, suppli
 
 On startup in non-`prod` profiles, the API seeds realistic demo data automatically when the database is empty:
 
-- 3 in-progress projects
+- 1 in-progress project
 - global stage templates and project-stage instances
 - 3 suppliers
 - supplier invoices with partially consumed materials

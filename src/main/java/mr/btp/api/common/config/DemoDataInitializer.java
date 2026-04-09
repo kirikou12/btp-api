@@ -107,40 +107,6 @@ public class DemoDataInitializer {
                 stageSpec("Painting", 6, StageStatus.NOT_STARTED, "9000.00", 0),
                 stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "15000.00", 0));
 
-            Project palmResidence = saveProject(projectRepository,
-                "Palm Residence",
-                "Tevragh Zeina",
-                "Client home under finishing, used to demonstrate near-delivery profitability.",
-                today.minusMonths(7),
-                "240000.00",
-                "175000.00",
-                ProjectStatus.IN_PROGRESS);
-
-            Map<String, ConstructionStage> palmStages = seedStages(stageRepository, stageTemplates, palmResidence,
-                stageSpec("Foundation", 1, StageStatus.COMPLETED, "32000.00", 100),
-                stageSpec("Elevation", 2, StageStatus.COMPLETED, "36000.00", 100),
-                stageSpec("Roofing", 3, StageStatus.COMPLETED, "22000.00", 100),
-                stageSpec("Plumbing", 4, StageStatus.COMPLETED, "18000.00", 100),
-                stageSpec("Electricity", 5, StageStatus.IN_PROGRESS, "16000.00", 60),
-                stageSpec("Painting", 6, StageStatus.IN_PROGRESS, "14000.00", 35),
-                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "17000.00", 0));
-
-            Project depotExtension = saveProject(projectRepository,
-                "Depot Extension",
-                "Dar Naim",
-                "Warehouse extension project used to demonstrate low-margin monitoring.",
-                today.minusMonths(2),
-                "98000.00",
-                "84000.00",
-                ProjectStatus.IN_PROGRESS);
-
-            Map<String, ConstructionStage> depotStages = seedStages(stageRepository, stageTemplates, depotExtension,
-                stageSpec("Foundation", 1, StageStatus.COMPLETED, "16000.00", 100),
-                stageSpec("Elevation", 2, StageStatus.IN_PROGRESS, "24000.00", 42),
-                stageSpec("Roofing", 3, StageStatus.NOT_STARTED, "15000.00", 0),
-                stageSpec("Painting", 6, StageStatus.NOT_STARTED, "12000.00", 0),
-                stageSpec("Finishing", 7, StageStatus.NOT_STARTED, "9000.00", 0));
-
             SupplierInvoice villaInvoice1 = saveInvoice(invoiceRepository, atlas, villaHorizon,
                 "INV-2026-001", today.minusMonths(2).minusDays(3), "5000.00", "Bulk cement and steel purchase");
             SupplierInvoiceItem villaCement = saveInvoiceItem(invoiceItemRepository, villaInvoice1, categories.get("Cement"),
@@ -155,20 +121,6 @@ public class DemoDataInitializer {
             SupplierInvoiceItem villaSand = saveInvoiceItem(invoiceItemRepository, villaInvoice2, categories.get("Sand"),
                 "River sand", "20.00", "m3", "60.00", "1200.00");
 
-            SupplierInvoice palmInvoice1 = saveInvoice(invoiceRepository, atlas, palmResidence,
-                "INV-2026-021", today.minusMonths(3), "8600.00", "Electrical and finishing materials");
-            SupplierInvoiceItem palmCables = saveInvoiceItem(invoiceItemRepository, palmInvoice1, categories.get("Electricity"),
-                "Electrical cable drums", "12.00", "rolls", "250.00", "3000.00");
-            SupplierInvoiceItem palmPaint = saveInvoiceItem(invoiceItemRepository, palmInvoice1, categories.get("Paint"),
-                "Facade and interior paint", "80.00", "buckets", "45.00", "3600.00");
-            SupplierInvoiceItem palmWaterproof = saveInvoiceItem(invoiceItemRepository, palmInvoice1, categories.get("Waterproofing"),
-                "Roof waterproofing membrane", "20.00", "rolls", "100.00", "2000.00");
-
-            SupplierInvoice depotInvoice1 = saveInvoice(invoiceRepository, atlas, depotExtension,
-                "INV-2026-030", today.minusDays(32), "6400.00", "Steel structure material package");
-            SupplierInvoiceItem depotSteel = saveInvoiceItem(invoiceItemRepository, depotInvoice1, categories.get("Steel"),
-                "IPE beams and steel bars", "1.00", "lot", "6400.00", "6400.00");
-
             saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Foundation"), villaCement, categories.get("Cement"),
                 "25.00", "500.00", today.minusDays(48), "Foundation slab concrete");
             saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Foundation"), villaSteel, categories.get("Steel"),
@@ -182,16 +134,6 @@ public class DemoDataInitializer {
             saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Elevation"), villaSand, categories.get("Sand"),
                 "8.00", "480.00", today.minusDays(10), "Mortar and render mix");
 
-            saveConsumption(consumptionRepository, palmResidence, palmStages.get("Electricity"), palmCables, categories.get("Electricity"),
-                "7.00", "1750.00", today.minusDays(11), "Main circuits and panel wiring");
-            saveConsumption(consumptionRepository, palmResidence, palmStages.get("Painting"), palmPaint, categories.get("Paint"),
-                "32.00", "1440.00", today.minusDays(7), "Interior first coat");
-            saveConsumption(consumptionRepository, palmResidence, palmStages.get("Roofing"), palmWaterproof, categories.get("Waterproofing"),
-                "12.00", "1200.00", today.minusDays(70), "Roof terrace membrane");
-
-            saveConsumption(consumptionRepository, depotExtension, depotStages.get("Elevation"), depotSteel, categories.get("Steel"),
-                "0.55", "3520.00", today.minusDays(9), "Main frame assembly");
-
             saveExpense(expenseRepository, villaHorizon, villaStages.get("Foundation"), categories.get("Labor"), null,
                 "2200.00", "Foundation labor team", today.minusDays(49));
             saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Labor"), null,
@@ -200,22 +142,6 @@ public class DemoDataInitializer {
                 "450.00", "Truck transport", today.minusDays(14));
             saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Equipment Rental"), transit,
                 "600.00", "Mixer rental", today.minusDays(13));
-
-            saveExpense(expenseRepository, palmResidence, palmStages.get("Electricity"), categories.get("Labor"), null,
-                "2400.00", "Electrical subcontractor advance", today.minusDays(10));
-            saveExpense(expenseRepository, palmResidence, palmStages.get("Painting"), categories.get("Labor"), null,
-                "1600.00", "Painting crew week 1", today.minusDays(6));
-            saveExpense(expenseRepository, palmResidence, palmStages.get("Painting"), categories.get("Misc"), null,
-                "320.00", "Cleaning supplies and masking", today.minusDays(5));
-
-            saveExpense(expenseRepository, depotExtension, depotStages.get("Foundation"), categories.get("Labor"), null,
-                "1450.00", "Concrete crew", today.minusDays(27));
-            saveExpense(expenseRepository, depotExtension, depotStages.get("Elevation"), categories.get("Labor"), null,
-                "2100.00", "Steel installers", today.minusDays(8));
-            saveExpense(expenseRepository, depotExtension, depotStages.get("Elevation"), categories.get("Equipment Rental"), transit,
-                "950.00", "Welding generator rental", today.minusDays(7));
-            saveExpense(expenseRepository, depotExtension, depotStages.get("Elevation"), categories.get("Transport"), transit,
-                "700.00", "Steel delivery and crane move", today.minusDays(8));
         };
     }
 
