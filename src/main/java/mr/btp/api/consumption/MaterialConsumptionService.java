@@ -38,14 +38,14 @@ public class MaterialConsumptionService {
     @Transactional
     public ConsumptionDtos.ConsumptionResponse create(ConsumptionDtos.ConsumptionRequest request) {
         MaterialConsumption consumption = new MaterialConsumption();
-        apply(consumption, request, null);
+        apply(consumption, request, null, false);
         return toResponse(consumptionRepository.save(consumption));
     }
 
     @Transactional
     public ConsumptionDtos.ConsumptionResponse update(Long id, ConsumptionDtos.ConsumptionRequest request) {
         MaterialConsumption consumption = referenceDataService.getConsumption(id);
-        apply(consumption, request, id);
+        apply(consumption, request, id, true);
         return toResponse(consumptionRepository.save(consumption));
     }
 
@@ -57,13 +57,13 @@ public class MaterialConsumptionService {
         consumptionRepository.deleteById(id);
     }
 
-    private void apply(MaterialConsumption consumption, ConsumptionDtos.ConsumptionRequest request, Long existingId) {
+    private void apply(MaterialConsumption consumption, ConsumptionDtos.ConsumptionRequest request, Long existingId, boolean allowCompletedStage) {
         SupplierInvoiceItem invoiceItem = referenceDataService.getInvoiceItem(request.invoiceItemId());
         ConstructionStage stage = referenceDataService.getStage(request.stageId());
         if (!stage.getProject().getId().equals(request.projectId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
         }
-        if (stage.getStatus() == StageStatus.COMPLETED) {
+        if (stage.getStatus() == StageStatus.COMPLETED && !allowCompletedStage) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record consumption on a completed stage");
         }
         if (!invoiceItem.getCategory().getId().equals(request.categoryId())) {

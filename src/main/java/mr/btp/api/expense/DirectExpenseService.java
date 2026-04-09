@@ -36,14 +36,14 @@ public class DirectExpenseService {
     @Transactional
     public ExpenseDtos.ExpenseResponse create(ExpenseDtos.ExpenseRequest request) {
         DirectExpense expense = new DirectExpense();
-        apply(expense, request);
+        apply(expense, request, false);
         return toResponse(expenseRepository.save(expense));
     }
 
     @Transactional
     public ExpenseDtos.ExpenseResponse update(Long id, ExpenseDtos.ExpenseRequest request) {
         DirectExpense expense = referenceDataService.getExpense(id);
-        apply(expense, request);
+        apply(expense, request, true);
         return toResponse(expenseRepository.save(expense));
     }
 
@@ -55,13 +55,13 @@ public class DirectExpenseService {
         expenseRepository.deleteById(id);
     }
 
-    private void apply(DirectExpense expense, ExpenseDtos.ExpenseRequest request) {
+    private void apply(DirectExpense expense, ExpenseDtos.ExpenseRequest request, boolean allowCompletedStage) {
         expense.setProject(referenceDataService.getProject(request.projectId()));
         ConstructionStage stage = request.stageId() == null ? null : referenceDataService.getStage(request.stageId());
         if (stage != null && !stage.getProject().getId().equals(request.projectId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the same project");
         }
-        if (stage != null && stage.getStatus() == StageStatus.COMPLETED) {
+        if (stage != null && stage.getStatus() == StageStatus.COMPLETED && !allowCompletedStage) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record a direct expense on a completed stage");
         }
         if (request.subCategory() != null && !request.subCategory().isBlank() && referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.LABOR) {
