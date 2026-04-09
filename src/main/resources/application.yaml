@@ -30,6 +30,12 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
 app:
   security:
     jwt-secret: 0123456789012345678901234567890101234567890123456789012345678901

@@ -17,6 +17,14 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, suppli
 ./mvnw spring-boot:run
 ```
 
+On startup in non-`prod` profiles, the API seeds realistic demo data automatically when the database is empty:
+
+- 3 in-progress projects
+- staged budgets and statuses
+- 3 suppliers
+- supplier invoices with partially consumed materials
+- direct expenses and material consumptions for dashboards and reports
+
 Demo login:
 
 - `demo@btp.local`
