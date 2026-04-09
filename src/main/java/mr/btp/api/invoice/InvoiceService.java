@@ -27,10 +27,12 @@ public class InvoiceService {
         this.referenceDataService = referenceDataService;
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<InvoiceDtos.InvoiceResponse> list(int page, int size) {
         return PageResponse.from(invoiceRepository.findAll(PageRequest.of(page, size)).map(this::toResponse));
     }
 
+    @Transactional(readOnly = true)
     public InvoiceDtos.InvoiceResponse get(Long id) {
         return toResponse(referenceDataService.getInvoice(id));
     }
