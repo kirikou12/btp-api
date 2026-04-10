@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -20,8 +22,12 @@ import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 class RimBtpApiApplicationTests {
 
     @Autowired
@@ -32,6 +38,9 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private InvoiceService invoiceService;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @Test
     void shouldPreventOverConsumption() {
@@ -131,5 +140,12 @@ class RimBtpApiApplicationTests {
 
         assertThat(uploaded.path()).startsWith("/api/uploads/");
         assertThat(documentStorageService.load(uploaded.fileName()).exists()).isTrue();
+    }
+
+    @Test
+    void shouldExposeActuatorLivenessWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/actuator/health/liveness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
     }
 }

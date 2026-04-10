@@ -3,5 +3,8 @@
 .DS_Store
 target
 data
+.data
 README.md
 *.iml
+.env
+src/main/resources/application-local-secrets.yaml

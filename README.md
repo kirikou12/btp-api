@@ -18,6 +18,21 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, suppli
 ./mvnw spring-boot:run
 ```
 
+The API defaults to the `local` profile when no profile is set. Local mode uses:
+
+- in-memory H2
+- demo seed data
+- Swagger UI and H2 console
+- a local JWT secret fallback for development only
+
+Useful local endpoints:
+
+- `http://localhost:8080/swagger-ui.html`
+- `http://localhost:8080/h2-console`
+- `http://localhost:8080/actuator/health`
+- `http://localhost:8080/actuator/health/liveness`
+- `http://localhost:8080/actuator/health/readiness`
+
 ## Docker
 
 Build the production image from the `btp-api` directory:
@@ -33,11 +48,30 @@ docker run --rm -p 8080:8080 \
   -e DB_URL=jdbc:postgresql://host.docker.internal:5432/btp \
   -e DB_USERNAME=btp \
   -e DB_PASSWORD=btp \
+  -e APP_SECURITY_JWT_SECRET='replace-with-a-long-random-secret' \
+  -e APP_SECURITY_CORS_ALLOWED_ORIGINS='https://app.example.com,https://admin.example.com' \
   -v "$(pwd)/data:/app/data" \
   btp-api
 ```
 
 The image stores uploaded files under `/app/data/uploads`, so mounting `/app/data` keeps documents persistent across container restarts.
+
+Required production environment variables:
+
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `APP_SECURITY_JWT_SECRET`
+- `APP_SECURITY_CORS_ALLOWED_ORIGINS`
+
+Optional production environment variables:
+
+- `APP_SECURITY_JWT_EXPIRATION_MINUTES`
+- `DB_POOL_MAX_SIZE`
+- `DB_POOL_MIN_IDLE`
+- `APP_DOCUMENTS_UPLOAD_DIR`
+- `APP_DOCUMENTS_MAX_FILE_SIZE`
+- `APP_DOCUMENTS_MAX_REQUEST_SIZE`
 
 On startup in non-`prod` profiles, the API seeds realistic demo data automatically when the database is empty:
 
@@ -54,8 +88,16 @@ Demo login:
 
 ## Profiles
 
-- default/dev: H2 in PostgreSQL mode
+- `local` (default): H2 in PostgreSQL mode
 - `prod`: PostgreSQL using `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`
+
+## Actuator
+
+Actuator is enabled with a minimal public surface:
+
+- exposed endpoints: `health`, `info`
+- unauthenticated health probes: `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness`
+- other actuator endpoints remain protected by Spring Security
 
 ## Document uploads
 

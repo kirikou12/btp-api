@@ -17,8 +17,16 @@ spring:
       enabled: true
       path: /h2-console
 
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 app:
-  cors:
-    allowed-origins: "*"
+  security:
+    jwt-secret: ${APP_SECURITY_JWT_SECRET:0123456789012345678901234567890101234567890123456789012345678901}
+    jwt-expiration-minutes: ${APP_SECURITY_JWT_EXPIRATION_MINUTES:120}
+    cors-allowed-origins: ${APP_SECURITY_CORS_ALLOWED_ORIGINS:*}
   documents:
-    upload-dir: ".data/uploads"
+    upload-dir: ${APP_DOCUMENTS_UPLOAD_DIR:.data/uploads}
