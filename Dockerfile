@@ -24,11 +24,11 @@ RUN groupadd --system spring \
 
 ENV SPRING_PROFILES_ACTIVE=prod \
     APP_DOCUMENTS_UPLOAD_DIR=/app/data/uploads \
-    SERVER_PORT=8080
+    SERVER_PORT=8081
 
 COPY --from=build /app/target/*.jar /app/app.jar
 
-EXPOSE 8080
+EXPOSE 8081
 
 VOLUME ["/app/data"]
 
