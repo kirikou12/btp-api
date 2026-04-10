@@ -18,6 +18,27 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, suppli
 ./mvnw spring-boot:run
 ```
 
+## Docker
+
+Build the production image from the `btp-api` directory:
+
+```bash
+docker build -t btp-api .
+```
+
+Run it with the `prod` profile and PostgreSQL settings:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://host.docker.internal:5432/btp \
+  -e DB_USERNAME=btp \
+  -e DB_PASSWORD=btp \
+  -v "$(pwd)/data:/app/data" \
+  btp-api
+```
+
+The image stores uploaded files under `/app/data/uploads`, so mounting `/app/data` keeps documents persistent across container restarts.
+
 On startup in non-`prod` profiles, the API seeds realistic demo data automatically when the database is empty:
 
 - 1 in-progress project

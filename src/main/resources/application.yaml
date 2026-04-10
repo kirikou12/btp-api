@@ -1,58 +1,37 @@
 spring:
-  application:
-    name: btp-api
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-  datasource:
-    url: jdbc:h2:mem:btpdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        format_sql: true
-    open-in-view: false
-  h2:
-    console:
-      enabled: true
-  flyway:
-    enabled: true
-
-server:
-  error:
-    include-message: always
-
-springdoc:
-  swagger-ui:
-    path: /swagger-ui.html
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health
-
-app:
-  security:
-    jwt-secret: 0123456789012345678901234567890101234567890123456789012345678901
-    jwt-expiration-minutes: 480
-  documents:
-    upload-dir: ${APP_DOCUMENTS_UPLOAD_DIR:./data/uploads}
-
----
-spring:
   config:
     activate:
       on-profile: prod
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/btp}
-    username: ${DB_USERNAME:btp}
-    password: ${DB_PASSWORD:btp}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      auto-commit: false
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
   h2:
     console:
       enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  error:
+    include-message: never
+    include-binding-errors: never
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  security:
+    jwt-secret: ${APP_SECURITY_JWT_SECRET}
+    jwt-expiration-minutes: ${APP_SECURITY_JWT_EXPIRATION_MINUTES:120}
+    cors-allowed-origins: ${APP_SECURITY_CORS_ALLOWED_ORIGINS:*}
+  documents:
+    upload-dir: ${APP_DOCUMENTS_UPLOAD_DIR:/app/data/uploads}
