@@ -21,6 +21,10 @@ import mr.btp.api.supplier.Supplier;
 import mr.btp.api.supplier.SupplierRepository;
 import mr.btp.api.user.User;
 import mr.btp.api.user.UserRepository;
+import mr.btp.api.worker.Worker;
+import mr.btp.api.worker.WorkerPayment;
+import mr.btp.api.worker.WorkerPaymentRepository;
+import mr.btp.api.worker.WorkerRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -40,6 +44,8 @@ public class ReferenceDataService {
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
     private final MaterialConsumptionRepository consumptionRepository;
+    private final WorkerRepository workerRepository;
+    private final WorkerPaymentRepository workerPaymentRepository;
 
     public ReferenceDataService(UserRepository userRepository,
                                 ProjectRepository projectRepository,
@@ -50,7 +56,9 @@ public class ReferenceDataService {
                                 DirectExpenseRepository expenseRepository,
                                 SupplierInvoiceRepository invoiceRepository,
                                 SupplierInvoiceItemRepository invoiceItemRepository,
-                                MaterialConsumptionRepository consumptionRepository) {
+                                MaterialConsumptionRepository consumptionRepository,
+                                WorkerRepository workerRepository,
+                                WorkerPaymentRepository workerPaymentRepository) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
@@ -61,6 +69,8 @@ public class ReferenceDataService {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.consumptionRepository = consumptionRepository;
+        this.workerRepository = workerRepository;
+        this.workerPaymentRepository = workerPaymentRepository;
     }
 
     public User getUser(Long id) {
@@ -103,6 +113,14 @@ public class ReferenceDataService {
         return consumptionRepository.findById(id).orElseThrow(() -> notFound("Material consumption"));
     }
 
+    public Worker getWorker(Long id) {
+        return workerRepository.findById(id).orElseThrow(() -> notFound("Worker"));
+    }
+
+    public WorkerPayment getWorkerPayment(Long id) {
+        return workerPaymentRepository.findById(id).orElseThrow(() -> notFound("Worker payment"));
+    }
+
     public BigDecimal invoiceItemConsumedAmount(Long invoiceItemId, Long excludingConsumptionId) {
         return consumptionRepository.findByInvoiceItemId(invoiceItemId).stream()
                 .filter(consumption -> excludingConsumptionId == null || !consumption.getId().equals(excludingConsumptionId))
@@ -133,6 +151,10 @@ public class ReferenceDataService {
         return consumptionRepository.findByProjectIdOrderByConsumptionDateDesc(projectId);
     }
 
+    public List<WorkerPayment> workerPaymentsByProject(Long projectId) {
+        return workerPaymentRepository.findByStage_Project_IdOrderByPaymentDateDesc(projectId);
+    }
+
     public List<SupplierInvoice> invoicesByProject(Long projectId) {
         return invoiceRepository.findByProjectIdOrProjectIdIsNullOrderByInvoiceDateDesc(projectId);
     }
@@ -146,7 +168,10 @@ public class ReferenceDataService {
                 .filter(consumption -> consumption.getStage().getId().equals(stageId))
                 .map(MaterialConsumption::getAmountUsed)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return expenses.add(consumptions);
+        BigDecimal workerPayments = workerPaymentRepository.findByStage_Id(stageId).stream()
+                .map(WorkerPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return expenses.add(consumptions).add(workerPayments);
     }
 
     private ApiException notFound(String resource) {

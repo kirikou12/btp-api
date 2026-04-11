@@ -1,6 +1,7 @@
 package mr.btp.api.expense;
 
 import mr.btp.api.category.CategoryType;
+import mr.btp.api.category.ExpenseCategory;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
@@ -64,15 +65,19 @@ public class DirectExpenseService {
         if (stage != null && stage.getStatus() == StageStatus.COMPLETED && !allowCompletedStage) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record a direct expense on a completed stage");
         }
-        if (request.subCategory() != null && !request.subCategory().isBlank() && referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.LABOR) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Sub-category is only allowed for labor expenses");
+        ExpenseCategory category = referenceDataService.getCategory(request.categoryId());
+        if (category.getType() == CategoryType.LABOR) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Labor must be recorded as worker payments");
+        }
+        if (request.subCategory() != null && !request.subCategory().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Sub-category is no longer allowed for direct expenses");
         }
         expense.setStage(stage);
-        expense.setCategory(referenceDataService.getCategory(request.categoryId()));
+        expense.setCategory(category);
         expense.setSupplier(request.supplierId() == null ? null : referenceDataService.getSupplier(request.supplierId()));
         expense.setAmount(request.amount());
         expense.setDescription(request.description().trim());
-        expense.setSubCategory(request.subCategory() == null || request.subCategory().isBlank() ? null : request.subCategory().trim());
+        expense.setSubCategory(null);
         expense.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
         expense.setExpenseDate(request.expenseDate());
     }

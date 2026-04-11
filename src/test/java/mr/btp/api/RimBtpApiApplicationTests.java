@@ -3,10 +3,10 @@ package mr.btp.api;
 import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.consumption.ConsumptionDtos;
 import mr.btp.api.consumption.MaterialConsumptionService;
-import mr.btp.api.expense.DirectExpenseService;
-import mr.btp.api.expense.ExpenseDtos;
 import mr.btp.api.invoice.InvoiceDtos;
 import mr.btp.api.invoice.InvoiceService;
+import mr.btp.api.worker.WorkerDtos;
+import mr.btp.api.worker.WorkerService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +34,7 @@ class RimBtpApiApplicationTests {
     private MaterialConsumptionService materialConsumptionService;
 
     @Autowired
-    private DirectExpenseService directExpenseService;
+    private WorkerService workerService;
 
     @Autowired
     private InvoiceService invoiceService;
@@ -75,29 +75,26 @@ class RimBtpApiApplicationTests {
 
     @Test
     @Transactional
-    void shouldAllowUpdatingDirectExpenseOnCompletedStageForCorrections() {
-        ExpenseDtos.ExpenseResponse existingExpense = directExpenseService.byProject(1L).stream()
-                .filter(expense -> Long.valueOf(1L).equals(expense.stageId()))
+    void shouldAllowUpdatingWorkerPaymentOnCompletedStageForCorrections() {
+        WorkerDtos.WorkerPaymentResponse existingPayment = workerService.paymentsByProject(1L).stream()
+                .filter(payment -> Long.valueOf(1L).equals(payment.stageId()))
                 .findFirst()
                 .orElseThrow();
 
-        ExpenseDtos.ExpenseResponse updatedExpense = directExpenseService.update(
-                existingExpense.id(),
-                new ExpenseDtos.ExpenseRequest(
-                        existingExpense.projectId(),
-                        existingExpense.stageId(),
-                        existingExpense.categoryId(),
-                        existingExpense.supplierId(),
+        WorkerDtos.WorkerPaymentResponse updatedPayment = workerService.updatePayment(
+                existingPayment.id(),
+                new WorkerDtos.WorkerPaymentRequest(
+                        existingPayment.workerId(),
+                        existingPayment.projectId(),
+                        existingPayment.stageId(),
                         new BigDecimal("2100.00"),
-                        "Foundation labor team corrected",
-                        existingExpense.subCategory(),
-                        existingExpense.documentRef(),
-                        existingExpense.expenseDate()
+                        existingPayment.paymentDate(),
+                        existingPayment.documentRef()
                 )
         );
 
-        assertThat(updatedExpense.amount()).isEqualByComparingTo("2100.00");
-        assertThat(updatedExpense.description()).contains("corrected");
+        assertThat(updatedPayment.amount()).isEqualByComparingTo("2100.00");
+        assertThat(updatedPayment.workerName()).isEqualTo(existingPayment.workerName());
     }
 
     @Test

@@ -7,6 +7,7 @@ import mr.btp.api.invoice.SupplierInvoiceItemRepository;
 import mr.btp.api.project.Project;
 import mr.btp.api.project.ProjectRepository;
 import mr.btp.api.project.ProjectStatus;
+import mr.btp.api.worker.WorkerPaymentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,15 +19,18 @@ public class DashboardService {
     private final ProjectRepository projectRepository;
     private final DirectExpenseRepository expenseRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
+    private final WorkerPaymentRepository workerPaymentRepository;
     private final ReferenceDataService referenceDataService;
 
     public DashboardService(ProjectRepository projectRepository,
                             DirectExpenseRepository expenseRepository,
                             SupplierInvoiceItemRepository invoiceItemRepository,
+                            WorkerPaymentRepository workerPaymentRepository,
                             ReferenceDataService referenceDataService) {
         this.projectRepository = projectRepository;
         this.expenseRepository = expenseRepository;
         this.invoiceItemRepository = invoiceItemRepository;
+        this.workerPaymentRepository = workerPaymentRepository;
         this.referenceDataService = referenceDataService;
     }
 
@@ -38,13 +42,14 @@ public class DashboardService {
         BigDecimal material = invoiceItemRepository.findAll().stream()
                 .map(item -> referenceDataService.invoiceItemConsumedAmount(item.getId(), null))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal actual = direct.add(material);
+        BigDecimal workers = workerPaymentRepository.findAll().stream().map(payment -> payment.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal actual = direct.add(material).add(workers);
         BigDecimal remainingSupplier = invoiceItemRepository.findAll().stream()
                 .map(this::remainingForItem)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         long active = projectRepository.findAll().stream().filter(project -> project.getStatus() == ProjectStatus.IN_PROGRESS).count();
         return new DashboardDtos.DashboardResponse(
-                direct, material, actual, totalBudget, totalBudget.subtract(actual), estimatedSale,
+                direct, material, workers, actual, totalBudget, totalBudget.subtract(actual), estimatedSale,
                 estimatedSale.subtract(actual), active, remainingSupplier
         );
     }
@@ -54,7 +59,8 @@ public class DashboardService {
         Project project = referenceDataService.getProject(projectId);
         BigDecimal direct = referenceDataService.expensesByProject(projectId).stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal material = referenceDataService.consumptionsByProject(projectId).stream().map(consumption -> consumption.getAmountUsed()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal actual = direct.add(material);
+        BigDecimal workers = referenceDataService.workerPaymentsByProject(projectId).stream().map(payment -> payment.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal actual = direct.add(material).add(workers);
         BigDecimal remainingSupplier = referenceDataService.invoicesByProject(projectId).stream()
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(this::remainingForItem)
@@ -62,6 +68,7 @@ public class DashboardService {
         return new DashboardDtos.DashboardResponse(
                 direct,
                 material,
+                workers,
                 actual,
                 project.getBudget(),
                 project.getBudget().subtract(actual),

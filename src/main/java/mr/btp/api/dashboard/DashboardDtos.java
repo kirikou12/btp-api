@@ -10,6 +10,7 @@ public final class DashboardDtos {
     public record DashboardResponse(
             BigDecimal totalDirectExpenses,
             BigDecimal totalMaterialConsumed,
+            BigDecimal totalWorkerPayments,
             BigDecimal totalActualCost,
             BigDecimal totalBudget,
             BigDecimal remainingBudget,

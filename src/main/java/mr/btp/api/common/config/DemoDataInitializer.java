@@ -29,6 +29,11 @@ import mr.btp.api.supplier.SupplierRepository;
 import mr.btp.api.user.User;
 import mr.btp.api.user.UserRepository;
 import mr.btp.api.user.UserRole;
+import mr.btp.api.worker.Worker;
+import mr.btp.api.worker.WorkerPayment;
+import mr.btp.api.worker.WorkerPaymentRepository;
+import mr.btp.api.worker.WorkerRepository;
+import mr.btp.api.worker.WorkerType;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,7 +55,9 @@ public class DemoDataInitializer {
                                    SupplierInvoiceRepository invoiceRepository,
                                    SupplierInvoiceItemRepository invoiceItemRepository,
                                    MaterialConsumptionRepository consumptionRepository,
-                                   DirectExpenseRepository expenseRepository) {
+                                   DirectExpenseRepository expenseRepository,
+                                   WorkerRepository workerRepository,
+                                   WorkerPaymentRepository workerPaymentRepository) {
         return args -> {
             if (userRepository.count() > 0) {
                 return;
@@ -134,10 +141,11 @@ public class DemoDataInitializer {
             saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Elevation"), villaSand, categories.get("Sand"),
                 "8.00", "480.00", today.minusDays(10), "Mortar and render mix");
 
-            saveExpense(expenseRepository, villaHorizon, villaStages.get("Foundation"), categories.get("Labor"), null,
-                "2200.00", "Foundation labor team", today.minusDays(49));
-            saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Labor"), null,
-                "1800.00", "Elevation labor team", today.minusDays(18));
+            Worker foundationMason = saveWorker(workerRepository, "Mohamed Diallo", WorkerType.MASON, "5000.00");
+            Worker electrician = saveWorker(workerRepository, "Sidi Ahmed", WorkerType.ELECTRICIAN, "3000.00");
+            saveWorkerPayment(workerPaymentRepository, foundationMason, villaStages.get("Foundation"), "2200.00", today.minusDays(49));
+            saveWorkerPayment(workerPaymentRepository, foundationMason, villaStages.get("Elevation"), "1800.00", today.minusDays(18));
+            saveWorkerPayment(workerPaymentRepository, electrician, villaStages.get("Elevation"), "650.00", today.minusDays(11));
             saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Transport"), transit,
                 "450.00", "Truck transport", today.minusDays(14));
             saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Equipment Rental"), transit,
@@ -305,6 +313,27 @@ public class DemoDataInitializer {
         expense.setDescription(description);
         expense.setExpenseDate(date);
         repository.save(expense);
+    }
+
+    private Worker saveWorker(WorkerRepository repository, String name, WorkerType type, String plannedBudget) {
+        Worker worker = new Worker();
+        worker.setName(name);
+        worker.setType(type);
+        worker.setPlannedBudget(amount(plannedBudget));
+        return repository.save(worker);
+    }
+
+    private void saveWorkerPayment(WorkerPaymentRepository repository,
+                                   Worker worker,
+                                   ConstructionStage stage,
+                                   String amount,
+                                   LocalDate date) {
+        WorkerPayment payment = new WorkerPayment();
+        payment.setWorker(worker);
+        payment.setStage(stage);
+        payment.setAmount(amount(amount));
+        payment.setPaymentDate(date);
+        repository.save(payment);
     }
 
     private ExpenseCategory saveCategory(ExpenseCategoryRepository repository, String name, CategoryType type, boolean isSystem) {

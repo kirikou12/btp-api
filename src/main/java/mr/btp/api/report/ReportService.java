@@ -2,6 +2,7 @@ package mr.btp.api.report;
 
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.invoice.SupplierInvoice;
+import mr.btp.api.worker.WorkerPayment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,9 @@ public class ReportService {
         referenceDataService.consumptionsByProject(projectId).forEach(consumption ->
                 totals.computeIfPresent(consumption.getStage().getId(), (key, value) -> value.add(consumption.getAmountUsed()))
         );
+        referenceDataService.workerPaymentsByProject(projectId).forEach(payment ->
+                totals.computeIfPresent(payment.getStage().getId(), (key, value) -> value.add(payment.getAmount()))
+        );
         return referenceDataService.stagesByProject(projectId).stream()
                 .map(stage -> new ReportDtos.StageCostRow(stage.getId(), stage.getName(), totals.getOrDefault(stage.getId(), BigDecimal.ZERO)))
                 .toList();
@@ -51,6 +55,15 @@ public class ReportService {
                 new ReportDtos.CategoryCostRow(consumption.getCategory().getId(), consumption.getCategory().getName(), consumption.getAmountUsed()),
                 (left, right) -> new ReportDtos.CategoryCostRow(left.categoryId(), left.categoryName(), left.totalCost().add(right.totalCost()))
         ));
+        referenceDataService.workerPaymentsByProject(projectId).forEach(payment -> {
+            Long workerCategoryKey = -1L - payment.getWorker().getType().ordinal();
+            String workerCategoryName = "Workers - " + payment.getWorker().getType().name();
+            rows.merge(
+                    workerCategoryKey,
+                    new ReportDtos.CategoryCostRow(workerCategoryKey, workerCategoryName, payment.getAmount()),
+                    (left, right) -> new ReportDtos.CategoryCostRow(left.categoryId(), left.categoryName(), left.totalCost().add(right.totalCost()))
+            );
+        });
         return new ArrayList<>(rows.values());
     }
 
@@ -84,10 +97,17 @@ public class ReportService {
         referenceDataService.consumptionsByProject(projectId).forEach(consumption -> rows.add(
                 new ReportDtos.ActivityFeedRow("CONSUMPTION", consumption.getCategory().getName(), consumption.getAmountUsed(), consumption.getConsumptionDate(), consumption.getStage().getName())
         ));
+        referenceDataService.workerPaymentsByProject(projectId).forEach(payment -> rows.add(
+                new ReportDtos.ActivityFeedRow("WORKER_PAYMENT", payment.getWorker().getName(), payment.getAmount(), payment.getPaymentDate(), workerPaymentDetails(payment))
+        ));
         referenceDataService.invoicesByProject(projectId).forEach(invoice -> rows.add(
                 new ReportDtos.ActivityFeedRow("INVOICE", invoice.getReference() == null ? "Supplier invoice" : invoice.getReference(), invoice.getTotalAmount(), invoice.getInvoiceDate(), invoice.getSupplier().getName())
         ));
         rows.sort(Comparator.comparing(ReportDtos.ActivityFeedRow::activityDate).reversed());
         return rows;
+    }
+
+    private String workerPaymentDetails(WorkerPayment payment) {
+        return payment.getStage().getName() + " • " + payment.getWorker().getType().name();
     }
 }
