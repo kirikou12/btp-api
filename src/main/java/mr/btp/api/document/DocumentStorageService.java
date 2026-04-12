@@ -1,19 +1,12 @@
 package mr.btp.api.document;
 
 import mr.btp.api.common.exception.ApiException;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -23,15 +16,10 @@ public class DocumentStorageService {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".heic");
 
-    private final Path uploadDirectory;
+    private final UploadedDocumentRepository uploadedDocumentRepository;
 
-    public DocumentStorageService(@Value("${app.documents.upload-dir:./data/uploads}") String uploadDirectory) {
-        this.uploadDirectory = Path.of(uploadDirectory).toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(this.uploadDirectory);
-        } catch (IOException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not initialize document storage");
-        }
+    public DocumentStorageService(UploadedDocumentRepository uploadedDocumentRepository) {
+        this.uploadedDocumentRepository = uploadedDocumentRepository;
     }
 
     public DocumentUploadResponse storeImage(MultipartFile file) {
@@ -45,40 +33,29 @@ public class DocumentStorageService {
         }
 
         String extension = getAllowedExtension(file.getOriginalFilename(), contentType);
+        String storedContentType = getStoredContentType(contentType, extension);
         String fileName = UUID.randomUUID() + extension;
-        Path targetFile = uploadDirectory.resolve(fileName).normalize();
 
-        try (InputStream inputStream = file.getInputStream()) {
-            Files.copy(inputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            UploadedDocument document = new UploadedDocument();
+            document.setFileName(fileName);
+            document.setOriginalFileName(sanitizeOriginalFileName(file.getOriginalFilename()));
+            document.setContentType(storedContentType);
+            document.setSizeBytes(file.getSize());
+            document.setContent(file.getBytes());
+            uploadedDocumentRepository.save(document);
         } catch (IOException exception) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store uploaded image");
         }
 
-        return new DocumentUploadResponse("/api/uploads/" + fileName, fileName, contentType, file.getSize());
+        return new DocumentUploadResponse("/api/uploads/" + fileName, fileName, storedContentType, file.getSize());
     }
 
-    public Resource load(String fileName) {
+    public StoredDocument load(String fileName) {
         String safeFileName = sanitizeFileName(fileName);
-        Path targetFile = uploadDirectory.resolve(safeFileName).normalize();
-        if (!targetFile.startsWith(uploadDirectory) || !Files.exists(targetFile)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Document not found");
-        }
-
-        try {
-            return new UrlResource(targetFile.toUri());
-        } catch (MalformedURLException exception) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not read stored document");
-        }
-    }
-
-    public String detectContentType(String fileName) {
-        String safeFileName = sanitizeFileName(fileName);
-        Path targetFile = uploadDirectory.resolve(safeFileName).normalize();
-        try {
-            return Files.probeContentType(targetFile);
-        } catch (IOException exception) {
-            return null;
-        }
+        UploadedDocument document = uploadedDocumentRepository.findByFileName(safeFileName)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Document not found"));
+        return new StoredDocument(document.getFileName(), document.getContentType(), document.getSizeBytes(), document.getContent());
     }
 
     private String getAllowedExtension(String originalFileName, String contentType) {
@@ -93,6 +70,22 @@ public class DocumentStorageService {
             case "image/webp" -> ".webp";
             case "image/heic", "image/heif" -> ".heic";
             default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported image type");
+        };
+    }
+
+    private String getStoredContentType(String contentType, String extension) {
+        return switch (contentType.toLowerCase(Locale.ROOT)) {
+            case "image/jpeg" -> "image/jpeg";
+            case "image/png" -> "image/png";
+            case "image/webp" -> "image/webp";
+            case "image/heic", "image/heif" -> "image/heic";
+            default -> switch (extension) {
+                case ".jpg", ".jpeg" -> "image/jpeg";
+                case ".png" -> "image/png";
+                case ".webp" -> "image/webp";
+                case ".heic" -> "image/heic";
+                default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported image type");
+            };
         };
     }
 
@@ -112,6 +105,16 @@ public class DocumentStorageService {
         return safeFileName;
     }
 
+    private String sanitizeOriginalFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return null;
+        }
+        return Path.of(fileName).getFileName().toString();
+    }
+
     public record DocumentUploadResponse(String path, String fileName, String contentType, long size) {
+    }
+
+    public record StoredDocument(String fileName, String contentType, long size, byte[] content) {
     }
 }

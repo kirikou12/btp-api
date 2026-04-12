@@ -19,18 +19,14 @@ WORKDIR /app
 
 RUN groupadd --system spring \
     && useradd --system --gid spring --create-home spring \
-    && mkdir -p /app/data/uploads \
     && chown -R spring:spring /app
 
 ENV SPRING_PROFILES_ACTIVE=prod \
-    APP_DOCUMENTS_UPLOAD_DIR=/app/data/uploads \
     SERVER_PORT=8081
 
 COPY --from=build /app/target/*.jar /app/app.jar
 
 EXPOSE 8081
-
-VOLUME ["/app/data"]
 
 USER spring:spring
 

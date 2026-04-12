@@ -1,6 +1,5 @@
 package mr.btp.api.document;
 
-import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -29,14 +28,14 @@ public class DocumentController {
     }
 
     @GetMapping("/{fileName}")
-    public ResponseEntity<Resource> getFile(@PathVariable String fileName) {
-        Resource resource = documentStorageService.load(fileName);
-        String detectedContentType = documentStorageService.detectContentType(fileName);
-        MediaType mediaType = detectedContentType != null ? MediaType.parseMediaType(detectedContentType) : MediaType.APPLICATION_OCTET_STREAM;
+    public ResponseEntity<byte[]> getFile(@PathVariable String fileName) {
+        DocumentStorageService.StoredDocument document = documentStorageService.load(fileName);
+        MediaType mediaType = document.contentType() != null ? MediaType.parseMediaType(document.contentType()) : MediaType.APPLICATION_OCTET_STREAM;
 
         return ResponseEntity.ok()
                 .contentType(mediaType)
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(fileName).build().toString())
-                .body(resource);
+                .contentLength(document.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(document.fileName()).build().toString())
+                .body(document.content());
     }
 }

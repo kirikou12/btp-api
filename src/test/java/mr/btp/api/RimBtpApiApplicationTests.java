@@ -8,7 +8,6 @@ import mr.btp.api.invoice.InvoiceService;
 import mr.btp.api.worker.WorkerDtos;
 import mr.btp.api.worker.WorkerService;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -17,7 +16,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.nio.file.Path;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +36,9 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private InvoiceService invoiceService;
+
+    @Autowired
+    private DocumentStorageService documentStorageService;
 
     @Autowired
     private MockMvc mockMvc;
@@ -124,8 +125,8 @@ class RimBtpApiApplicationTests {
     }
 
     @Test
-    void shouldStoreAndLoadUploadedDocument(@TempDir Path tempDirectory) {
-        DocumentStorageService documentStorageService = new DocumentStorageService(tempDirectory.toString());
+    @Transactional
+    void shouldStoreAndLoadUploadedDocument() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "proof.jpg",
@@ -136,7 +137,10 @@ class RimBtpApiApplicationTests {
         DocumentStorageService.DocumentUploadResponse uploaded = documentStorageService.storeImage(file);
 
         assertThat(uploaded.path()).startsWith("/api/uploads/");
-        assertThat(documentStorageService.load(uploaded.fileName()).exists()).isTrue();
+        DocumentStorageService.StoredDocument storedDocument = documentStorageService.load(uploaded.fileName());
+        assertThat(storedDocument.contentType()).isEqualTo("image/jpeg");
+        assertThat(storedDocument.size()).isEqualTo(4);
+        assertThat(storedDocument.content()).containsExactly(1, 2, 3, 4);
     }
 
     @Test

@@ -7,7 +7,7 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, suppli
 - JWT auth with register, login, and `me`
 - CRUD endpoints for projects, stage templates, project stages, categories, suppliers, expenses, invoices, and consumptions
 - Business rules for invoice reconciliation and over-consumption prevention
-- Local image upload endpoint for chantier receipts and supplier invoice photos
+- Database-backed image upload endpoint for chantier receipts and supplier invoice photos
 - Flyway database migration
 - Demo seed data
 - Swagger UI at `/swagger-ui.html`
@@ -50,11 +50,10 @@ docker run --rm -p 8080:8080 \
   -e DB_PASSWORD=btp \
   -e APP_SECURITY_JWT_SECRET='replace-with-a-long-random-secret' \
   -e APP_SECURITY_CORS_ALLOWED_ORIGINS='https://app.example.com,https://admin.example.com' \
-  -v "$(pwd)/data:/app/data" \
   btp-api
 ```
 
-The image stores uploaded files under `/app/data/uploads`, so mounting `/app/data` keeps documents persistent across container restarts.
+Uploaded documents are stored in PostgreSQL, so they persist with the database and do not depend on a writable container directory.
 
 Required production environment variables:
 
@@ -69,7 +68,6 @@ Optional production environment variables:
 - `APP_SECURITY_JWT_EXPIRATION_MINUTES`
 - `DB_POOL_MAX_SIZE`
 - `DB_POOL_MIN_IDLE`
-- `APP_DOCUMENTS_UPLOAD_DIR`
 - `APP_DOCUMENTS_MAX_FILE_SIZE`
 - `APP_DOCUMENTS_MAX_REQUEST_SIZE`
 
@@ -102,8 +100,7 @@ Actuator is enabled with a minimal public surface:
 ## Document uploads
 
 - `POST /api/uploads/images` accepts a multipart image file named `file`
-- Uploaded files are stored locally under `APP_DOCUMENTS_UPLOAD_DIR`
-- If `APP_DOCUMENTS_UPLOAD_DIR` is not set, the API uses `./data/uploads`
+- Uploaded files are stored in the `uploaded_documents` database table as binary content
 - Saved records keep the returned path such as `/api/uploads/<generated-file-name>`
 
 ## Core business rules

@@ -38,7 +38,3 @@ management:
       enabled: true
     readinessstate:
       enabled: true
-
-app:
-  documents:
-    upload-dir: ${APP_DOCUMENTS_UPLOAD_DIR:./data/uploads}
