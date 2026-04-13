@@ -5,6 +5,9 @@ import mr.btp.api.consumption.ConsumptionDtos;
 import mr.btp.api.consumption.MaterialConsumptionService;
 import mr.btp.api.invoice.InvoiceDtos;
 import mr.btp.api.invoice.InvoiceService;
+import mr.btp.api.project.ConstructionStage;
+import mr.btp.api.project.ConstructionStageRepository;
+import mr.btp.api.project.StageStatus;
 import mr.btp.api.worker.WorkerDtos;
 import mr.btp.api.worker.WorkerService;
 import org.junit.jupiter.api.Test;
@@ -38,6 +41,9 @@ class RimBtpApiApplicationTests {
     private InvoiceService invoiceService;
 
     @Autowired
+    private ConstructionStageRepository stageRepository;
+
+    @Autowired
     private DocumentStorageService documentStorageService;
 
     @Autowired
@@ -45,13 +51,20 @@ class RimBtpApiApplicationTests {
 
     @Test
     void shouldPreventOverConsumption() {
+        InvoiceDtos.InvoiceResponse invoice = invoiceService.list(0, 20).content().stream()
+                .filter(candidate -> candidate.projectId() != null && !candidate.items().isEmpty())
+                .findFirst()
+                .orElseThrow();
+        InvoiceDtos.InvoiceItemResponse item = invoice.items().getFirst();
+        ConstructionStage activeStage = stageByName(invoice.projectId(), "Elevation");
+
         ConsumptionDtos.ConsumptionRequest request = new ConsumptionDtos.ConsumptionRequest(
-                1L,
-                1L,
-                2L,
-                2L,
+                item.id(),
+                invoice.projectId(),
+                activeStage.getId(),
+                item.categoryId(),
                 new BigDecimal("1.00"),
-                new BigDecimal("9999.00"),
+                item.remainingAmount().add(new BigDecimal("1.00")),
                 LocalDate.now(),
                 "Too much"
         );
@@ -77,8 +90,11 @@ class RimBtpApiApplicationTests {
     @Test
     @Transactional
     void shouldAllowUpdatingWorkerPaymentOnCompletedStageForCorrections() {
-        WorkerDtos.WorkerPaymentResponse existingPayment = workerService.paymentsByProject(1L).stream()
-                .filter(payment -> Long.valueOf(1L).equals(payment.stageId()))
+        ConstructionStage completedStage = stageByName("Demo depenses CSV", "Fondation");
+        assertThat(completedStage.getStatus()).isEqualTo(StageStatus.COMPLETED);
+
+        WorkerDtos.WorkerPaymentResponse existingPayment = workerService.paymentsByProject(completedStage.getProject().getId()).stream()
+                .filter(payment -> completedStage.getId().equals(payment.stageId()))
                 .findFirst()
                 .orElseThrow();
 
@@ -101,8 +117,11 @@ class RimBtpApiApplicationTests {
     @Test
     @Transactional
     void shouldAllowUpdatingConsumptionOnCompletedStageForCorrections() {
-        ConsumptionDtos.ConsumptionResponse existingConsumption = materialConsumptionService.byProject(1L).stream()
-                .filter(consumption -> Long.valueOf(1L).equals(consumption.stageId()))
+        ConstructionStage completedStage = stageByName("Demo depenses CSV", "Fondation");
+        assertThat(completedStage.getStatus()).isEqualTo(StageStatus.COMPLETED);
+
+        ConsumptionDtos.ConsumptionResponse existingConsumption = materialConsumptionService.byProject(completedStage.getProject().getId()).stream()
+                .filter(consumption -> completedStage.getId().equals(consumption.stageId()))
                 .findFirst()
                 .orElseThrow();
 
@@ -148,5 +167,20 @@ class RimBtpApiApplicationTests {
         mockMvc.perform(get("/actuator/health/liveness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    private ConstructionStage stageByName(String projectName, String stageName) {
+        return stageRepository.findAll().stream()
+                .filter(stage -> projectName.equals(stage.getProject().getName()))
+                .filter(stage -> stageName.equals(stage.getName()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private ConstructionStage stageByName(Long projectId, String stageName) {
+        return stageRepository.findByProjectIdOrderBySortOrderAsc(projectId).stream()
+                .filter(stage -> stageName.equals(stage.getName()))
+                .findFirst()
+                .orElseThrow();
     }
 }
