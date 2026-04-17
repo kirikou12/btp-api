@@ -15,6 +15,7 @@ public final class WorkerDtos {
     public record WorkerRequest(
             @NotBlank String name,
             @NotNull WorkerType type,
+            Long projectId,
             @NotNull @DecimalMin("0.00") BigDecimal plannedBudget
     ) {
     }
@@ -23,6 +24,7 @@ public final class WorkerDtos {
             Long id,
             String name,
             WorkerType type,
+            Long projectId,
             BigDecimal plannedBudget,
             BigDecimal paidAmount,
             BigDecimal remainingBudget,

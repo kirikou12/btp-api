@@ -96,6 +96,7 @@ public class WorkerService {
     private void apply(Worker worker, WorkerDtos.WorkerRequest request) {
         worker.setName(request.name().trim());
         worker.setType(request.type());
+        worker.setProject(request.projectId() == null ? null : referenceDataService.getProject(request.projectId()));
         worker.setPlannedBudget(request.plannedBudget());
     }
 
@@ -123,6 +124,7 @@ public class WorkerService {
                 worker.getId(),
                 worker.getName(),
                 worker.getType(),
+                worker.getProject() == null ? null : worker.getProject().getId(),
                 worker.getPlannedBudget(),
                 paid,
                 worker.getPlannedBudget().subtract(paid),

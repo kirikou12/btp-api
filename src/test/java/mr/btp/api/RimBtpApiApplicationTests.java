@@ -12,6 +12,7 @@ import mr.btp.api.project.ConstructionStageRepository;
 import mr.btp.api.project.StageStatus;
 import mr.btp.api.worker.WorkerDtos;
 import mr.btp.api.worker.WorkerService;
+import mr.btp.api.worker.WorkerType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -215,6 +216,32 @@ class RimBtpApiApplicationTests {
         InvoiceDtos.InvoiceResponse sameInvoice = invoiceService.get(invoice.id());
         assertThat(sameInvoice.items()).isNotEmpty();
         assertThat(sameInvoice.items().getFirst().categoryName()).isNotBlank();
+    }
+
+    @Test
+    @Transactional
+    void shouldCreateAndUpdateWorkerProjectAssignment() {
+        ConstructionStage stage = stageRepository.findAll().stream().findFirst().orElseThrow();
+        Long projectId = stage.getProject().getId();
+
+        WorkerDtos.WorkerResponse created = workerService.createWorker(new WorkerDtos.WorkerRequest(
+                "Project mason",
+                WorkerType.MASON,
+                projectId,
+                new BigDecimal("1500.00")
+        ));
+
+        assertThat(created.projectId()).isEqualTo(projectId);
+
+        WorkerDtos.WorkerResponse updated = workerService.updateWorker(created.id(), new WorkerDtos.WorkerRequest(
+                "Project mason",
+                WorkerType.MASON,
+                null,
+                new BigDecimal("1750.00")
+        ));
+
+        assertThat(updated.projectId()).isNull();
+        assertThat(updated.plannedBudget()).isEqualByComparingTo("1750.00");
     }
 
     @Test
