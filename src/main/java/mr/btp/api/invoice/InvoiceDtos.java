@@ -19,6 +19,7 @@ public final class InvoiceDtos {
             InvoiceType invoiceType,
             @NotNull Long supplierId,
             Long projectId,
+            Long stageId,
             String reference,
             @NotNull LocalDate invoiceDate,
             @NotNull @DecimalMin("0.00") BigDecimal totalAmount,

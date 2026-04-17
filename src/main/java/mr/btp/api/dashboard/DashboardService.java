@@ -14,9 +14,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 public class DashboardService {
+
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE);
 
     private final ProjectRepository projectRepository;
     private final DirectExpenseRepository expenseRepository;
@@ -44,7 +47,8 @@ public class DashboardService {
         BigDecimal totalBudget = projectRepository.findAll().stream().map(Project::getBudget).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal estimatedSale = projectRepository.findAll().stream().map(Project::getEstimatedSalePrice).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal direct = expenseRepository.findAll().stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal material = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.USAGE).stream()
+        BigDecimal material = USAGE_INVOICE_TYPES.stream()
+                .flatMap(invoiceType -> invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream())
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(SupplierInvoiceItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

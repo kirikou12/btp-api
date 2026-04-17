@@ -60,7 +60,7 @@ insert into supplier_invoices (
 select
     source_invoice.supplier_id,
     legacy_group.project_id,
-    'USAGE',
+    'SUPPLY_USAGE',
     legacy_group.source_invoice_id,
     legacy_group.stage_id,
     'LEGACY-USAGE-' || cast(legacy_group.legacy_group_id as varchar),
@@ -79,7 +79,7 @@ update legacy_usage_groups legacy_group
 set new_invoice_id = usage_invoice.id
 from supplier_invoices usage_invoice
 where usage_invoice.reference = 'LEGACY-USAGE-' || cast(legacy_group.legacy_group_id as varchar)
-  and usage_invoice.invoice_type = 'USAGE';
+  and usage_invoice.invoice_type = 'SUPPLY_USAGE';
 
 insert into supplier_invoice_items (
     invoice_id,

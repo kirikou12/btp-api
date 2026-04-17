@@ -2,5 +2,6 @@ package mr.btp.api.invoice;
 
 public enum InvoiceType {
     SUPPLY,
-    USAGE
+    SUPPLY_USAGE,
+    DIRECT_USAGE
 }

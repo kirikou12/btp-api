@@ -35,6 +35,8 @@ import java.util.List;
 @Service
 public class ReferenceDataService {
 
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE);
+
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final ConstructionStageRepository stageRepository;
@@ -162,13 +164,13 @@ public class ReferenceDataService {
     }
 
     public List<SupplierInvoiceItem> usageItemsByProject(Long projectId) {
-        return invoiceRepository.findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, InvoiceType.USAGE).stream()
+        return invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES).stream()
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .toList();
     }
 
     public List<SupplierInvoice> usageInvoicesByProject(Long projectId) {
-        return invoiceRepository.findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, InvoiceType.USAGE);
+        return invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES);
     }
 
     public BigDecimal stageActualCost(Long stageId) {
@@ -176,7 +178,8 @@ public class ReferenceDataService {
                 .filter(expense -> expense.getStage() != null && expense.getStage().getId().equals(stageId))
                 .map(DirectExpense::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal consumptions = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.USAGE).stream()
+        BigDecimal consumptions = USAGE_INVOICE_TYPES.stream()
+                .flatMap(invoiceType -> invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream())
                 .filter(invoice -> invoice.getStage() != null && invoice.getStage().getId().equals(stageId))
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(SupplierInvoiceItem::getTotalAmount)

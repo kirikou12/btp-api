@@ -20,6 +20,8 @@ import java.util.stream.Collectors;
 @Service
 public class InvoiceService {
 
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE);
+
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
     private final ReferenceDataService referenceDataService;
@@ -65,19 +67,19 @@ public class InvoiceService {
             if (!stage.getProject().getId().equals(projectId)) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
             }
-            return invoiceRepository.findByProjectIdAndStageIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, stageId, InvoiceType.USAGE).stream()
+            return invoiceRepository.findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, stageId, USAGE_INVOICE_TYPES).stream()
                     .map(this::toResponse)
                     .toList();
         }
-        return invoiceRepository.findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, InvoiceType.USAGE).stream()
+        return invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional
     public InvoiceDtos.InvoiceResponse create(InvoiceDtos.InvoiceRequest request) {
-        if (request.invoiceType() == InvoiceType.USAGE) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Use /api/usage-invoices to create usage invoices");
+        if (request.invoiceType() == InvoiceType.SUPPLY_USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Use /api/usage-invoices to create supply usage invoices");
         }
         SupplierInvoice invoice = new SupplierInvoice();
         apply(invoice, request);
@@ -89,8 +91,11 @@ public class InvoiceService {
     @Transactional
     public InvoiceDtos.InvoiceResponse update(Long id, InvoiceDtos.InvoiceRequest request) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
-        if (invoice.getInvoiceType() == InvoiceType.USAGE || request.invoiceType() == InvoiceType.USAGE) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Use /api/usage-invoices to update usage invoices");
+        if (invoice.getInvoiceType() == InvoiceType.SUPPLY_USAGE || request.invoiceType() == InvoiceType.SUPPLY_USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Use /api/usage-invoices to update supply usage invoices");
+        }
+        if (request.invoiceType() != null && invoice.getInvoiceType() != request.invoiceType()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice type cannot be changed");
         }
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
@@ -111,7 +116,7 @@ public class InvoiceService {
         ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId(), false);
 
         SupplierInvoice invoice = new SupplierInvoice();
-        invoice.setInvoiceType(InvoiceType.USAGE);
+        invoice.setInvoiceType(InvoiceType.SUPPLY_USAGE);
         invoice.setSupplier(source.getSupplier());
         invoice.setProject(referenceDataService.getProject(request.projectId()));
         invoice.setStage(stage);
@@ -135,8 +140,8 @@ public class InvoiceService {
     @Transactional
     public InvoiceDtos.InvoiceResponse updateUsage(Long id, InvoiceDtos.UsageInvoiceRequest request) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
-        if (invoice.getInvoiceType() != InvoiceType.USAGE) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Only usage invoices can be updated here");
+        if (invoice.getInvoiceType() != InvoiceType.SUPPLY_USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only supply usage invoices can be updated here");
         }
         SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
         validateSupplySource(source);
@@ -165,8 +170,8 @@ public class InvoiceService {
     @Transactional
     public void deleteUsage(Long id) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
-        if (invoice.getInvoiceType() != InvoiceType.USAGE) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Only usage invoices can be deleted here");
+        if (invoice.getInvoiceType() != InvoiceType.SUPPLY_USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only supply usage invoices can be deleted here");
         }
         invoiceRepository.delete(invoice);
     }
@@ -196,11 +201,24 @@ public class InvoiceService {
     }
 
     private void apply(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request) {
-        invoice.setInvoiceType(InvoiceType.SUPPLY);
+        InvoiceType invoiceType = request.invoiceType() == null ? invoice.getInvoiceType() : request.invoiceType();
+        if (invoiceType == InvoiceType.DIRECT_USAGE) {
+            if (request.projectId() == null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Project is required for direct usage invoices");
+            }
+            if (request.stageId() == null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for direct usage invoices");
+            }
+            ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId(), false);
+            invoice.setStage(stage);
+            invoice.setProject(stage.getProject());
+        } else {
+            invoice.setStage(null);
+            invoice.setProject(request.projectId() == null ? null : referenceDataService.getProject(request.projectId()));
+        }
+        invoice.setInvoiceType(invoiceType);
         invoice.setSourceSupplyInvoice(null);
-        invoice.setStage(null);
         invoice.setSupplier(referenceDataService.getSupplier(request.supplierId()));
-        invoice.setProject(request.projectId() == null ? null : referenceDataService.getProject(request.projectId()));
         invoice.setReference(request.reference());
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setTotalAmount(request.totalAmount());

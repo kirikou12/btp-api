@@ -76,7 +76,7 @@ class RimBtpApiApplicationTests {
                         .toList()
         ));
 
-        assertThat(usage.invoiceType()).isEqualTo(InvoiceType.USAGE);
+        assertThat(usage.invoiceType()).isEqualTo(InvoiceType.SUPPLY_USAGE);
         assertThat(usage.sourceSupplyInvoiceId()).isEqualTo(supply.id());
         assertThat(usage.stageId()).isEqualTo(activeStage.getId());
         assertThat(usage.items()).hasSize(2);
@@ -96,6 +96,51 @@ class RimBtpApiApplicationTests {
                     .orElseThrow();
             assertThat(after.availableQuantity()).isEqualByComparingTo(before.availableQuantity().subtract(BigDecimal.ONE));
         });
+    }
+
+    @Test
+    @Transactional
+    void shouldCreateDirectUsageInvoiceWithoutSourceSupply() {
+        InvoiceDtos.InvoiceResponse supply = invoiceService.list(0, 50, "SUPPLY").content().stream()
+                .filter(candidate -> candidate.projectId() != null)
+                .filter(candidate -> !candidate.items().isEmpty())
+                .findFirst()
+                .orElseThrow();
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
+        InvoiceDtos.InvoiceItemResponse material = supply.items().getFirst();
+
+        InvoiceDtos.InvoiceResponse direct = invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.DIRECT_USAGE,
+                supply.supplierId(),
+                supply.projectId(),
+                activeStage.getId(),
+                "DIRECT-TEST",
+                LocalDate.now(),
+                new BigDecimal("125.00"),
+                supply.currency(),
+                "Billed and consumed immediately",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+                        null,
+                        null,
+                        material.categoryId(),
+                        material.description(),
+                        BigDecimal.ONE,
+                        material.unit(),
+                        new BigDecimal("125.00"),
+                        new BigDecimal("125.00")
+                ))
+        ));
+
+        assertThat(direct.invoiceType()).isEqualTo(InvoiceType.DIRECT_USAGE);
+        assertThat(direct.sourceSupplyInvoiceId()).isNull();
+        assertThat(direct.stageId()).isEqualTo(activeStage.getId());
+        assertThat(direct.consumedAmount()).isEqualByComparingTo("125.00");
+        assertThat(direct.remainingAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(invoiceService.usageInvoicesByProject(supply.projectId(), activeStage.getId()))
+                .extracting(InvoiceDtos.InvoiceResponse::id)
+                .contains(direct.id());
     }
 
     @Test

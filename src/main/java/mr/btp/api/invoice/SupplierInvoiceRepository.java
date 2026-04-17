@@ -9,4 +9,6 @@ public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice
     List<SupplierInvoice> findByProjectIdAndInvoiceTypeOrderByInvoiceDateDesc(Long projectId, InvoiceType invoiceType);
     List<SupplierInvoice> findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(Long projectId, InvoiceType invoiceType);
     List<SupplierInvoice> findByProjectIdAndStageIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(Long projectId, Long stageId, InvoiceType invoiceType);
+    List<SupplierInvoice> findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(Long projectId, List<InvoiceType> invoiceTypes);
+    List<SupplierInvoice> findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(Long projectId, Long stageId, List<InvoiceType> invoiceTypes);
 }
