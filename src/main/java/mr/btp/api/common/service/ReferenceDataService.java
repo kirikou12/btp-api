@@ -124,8 +124,22 @@ public class ReferenceDataService {
         return workerPaymentRepository.findById(id).orElseThrow(() -> notFound("Worker payment"));
     }
 
-    public BigDecimal invoiceItemConsumedAmount(Long invoiceItemId, Long excludingConsumptionId) {
+    public BigDecimal invoiceItemOutgoingAmount(Long invoiceItemId, Long excludingInvoiceId) {
+        return invoiceItemAmountByType(invoiceItemId, excludingInvoiceId, List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN));
+    }
+
+    public BigDecimal invoiceItemConsumedAmount(Long invoiceItemId, Long excludingInvoiceId) {
+        return invoiceItemAmountByType(invoiceItemId, excludingInvoiceId, List.of(InvoiceType.SUPPLY_USAGE));
+    }
+
+    public BigDecimal invoiceItemReturnedAmount(Long invoiceItemId, Long excludingInvoiceId) {
+        return invoiceItemAmountByType(invoiceItemId, excludingInvoiceId, List.of(InvoiceType.SUPPLY_RETURN));
+    }
+
+    private BigDecimal invoiceItemAmountByType(Long invoiceItemId, Long excludingInvoiceId, List<InvoiceType> invoiceTypes) {
         return invoiceItemRepository.findBySourceSupplyItemId(invoiceItemId).stream()
+                .filter(item -> invoiceTypes.contains(item.getInvoice().getInvoiceType()))
+                .filter(item -> excludingInvoiceId == null || !item.getInvoice().getId().equals(excludingInvoiceId))
                 .map(SupplierInvoiceItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -134,6 +148,13 @@ public class ReferenceDataService {
         return invoiceItemRepository.findByInvoiceId(invoiceId).stream()
                 .map(SupplierInvoiceItem::getId)
                 .map(itemId -> invoiceItemConsumedAmount(itemId, null))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public BigDecimal invoiceOutgoingAmount(Long invoiceId) {
+        return invoiceItemRepository.findByInvoiceId(invoiceId).stream()
+                .map(SupplierInvoiceItem::getId)
+                .map(itemId -> invoiceItemOutgoingAmount(itemId, null))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

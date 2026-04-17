@@ -1,0 +1,3 @@
+-- The invoice_type column is currently a varchar without a CHECK constraint in
+-- the existing migrations. This migration documents the newly accepted
+-- business value for deployed databases without rewriting prior migrations.

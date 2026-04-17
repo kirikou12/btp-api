@@ -58,6 +58,11 @@ public class InvoiceController {
         invoiceService.deleteUsage(id);
     }
 
+    @DeleteMapping("/api/return-invoices/{id}")
+    public void deleteReturn(@PathVariable Long id) {
+        invoiceService.deleteReturn(id);
+    }
+
     @PostMapping("/api/supplier-invoice-items")
     public InvoiceDtos.InvoiceItemResponse createItem(@Valid @RequestBody InvoiceDtos.InvoiceItemUpsertRequest request) {
         return invoiceService.createItem(request);

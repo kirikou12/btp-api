@@ -3,6 +3,8 @@ package mr.btp.api;
 import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.consumption.ConsumptionDtos;
 import mr.btp.api.consumption.MaterialConsumptionService;
+import mr.btp.api.dashboard.DashboardDtos;
+import mr.btp.api.dashboard.DashboardService;
 import mr.btp.api.invoice.InvoiceDtos;
 import mr.btp.api.invoice.InvoiceService;
 import mr.btp.api.invoice.InvoiceStatus;
@@ -43,6 +45,9 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private InvoiceService invoiceService;
+
+    @Autowired
+    private DashboardService dashboardService;
 
     @Autowired
     private ConstructionStageRepository stageRepository;
@@ -149,6 +154,130 @@ class RimBtpApiApplicationTests {
         assertThat(invoiceService.usageInvoicesByProject(supply.projectId(), activeStage.getId()))
                 .extracting(InvoiceDtos.InvoiceResponse::id)
                 .contains(direct.id());
+    }
+
+    @Test
+    @Transactional
+    void shouldCreateSupplyReturnAndReduceAvailableQuantity() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+
+        InvoiceDtos.InvoiceResponse supplyReturn = createReturn(supply, sourceItem, BigDecimal.ONE);
+
+        assertThat(supplyReturn.invoiceType()).isEqualTo(InvoiceType.SUPPLY_RETURN);
+        assertThat(supplyReturn.sourceSupplyInvoiceId()).isEqualTo(supply.id());
+        assertThat(supplyReturn.projectId()).isNull();
+        assertThat(supplyReturn.stageId()).isNull();
+
+        InvoiceDtos.InvoiceResponse refreshedSupply = invoiceService.get(supply.id());
+        assertThat(refreshedSupply.items().getFirst().availableQuantity()).isEqualByComparingTo("9.00");
+        assertThat(refreshedSupply.items().getFirst().consumedAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(refreshedSupply.items().getFirst().remainingAmount()).isEqualByComparingTo(new BigDecimal("900.00"));
+    }
+
+    @Test
+    @Transactional
+    void shouldRejectSupplyReturnAboveAvailableQuantity() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+
+        assertThatThrownBy(() -> createReturn(supply, sourceItem, new BigDecimal("11.00")))
+                .hasMessageContaining("Return quantity exceeds available supply quantity");
+    }
+
+    @Test
+    @Transactional
+    void shouldPreventUsageOfReturnedQuantities() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
+
+        createReturn(supply, sourceItem, new BigDecimal("4.00"));
+
+        InvoiceDtos.InvoiceResponse usage = invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                supply.id(),
+                supply.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "Use remaining after return",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.UsageInvoiceItemRequest(sourceItem.id(), new BigDecimal("6.00")))
+        ));
+        assertThat(usage.totalAmount()).isEqualByComparingTo("600.00");
+        assertThat(invoiceService.get(supply.id()).items().getFirst().availableQuantity()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                supply.id(),
+                supply.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "One more should fail",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.UsageInvoiceItemRequest(sourceItem.id(), BigDecimal.ONE))
+        ))).hasMessageContaining("Usage quantity exceeds available supply quantity");
+    }
+
+    @Test
+    @Transactional
+    void shouldNotCountSupplyReturnAsProjectCost() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+        DashboardDtos.DashboardResponse beforeProject = dashboardService.byProject(supply.projectId());
+        DashboardDtos.DashboardResponse beforeGlobal = dashboardService.global();
+
+        InvoiceDtos.InvoiceResponse supplyReturn = createReturn(supply, sourceItem, new BigDecimal("3.00"));
+
+        DashboardDtos.DashboardResponse afterProject = dashboardService.byProject(supply.projectId());
+        DashboardDtos.DashboardResponse afterGlobal = dashboardService.global();
+        assertThat(afterProject.totalActualCost()).isEqualByComparingTo(beforeProject.totalActualCost());
+        assertThat(afterProject.totalMaterialConsumed()).isEqualByComparingTo(beforeProject.totalMaterialConsumed());
+        assertThat(afterGlobal.materialsRemainingWithSuppliers())
+                .isEqualByComparingTo(beforeGlobal.materialsRemainingWithSuppliers().subtract(supplyReturn.totalAmount()));
+    }
+
+    @Test
+    @Transactional
+    void shouldUpdateSupplyReturnAndValidateEditableAvailability() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+        InvoiceDtos.InvoiceResponse supplyReturn = createReturn(supply, sourceItem, new BigDecimal("2.00"));
+
+        InvoiceDtos.InvoiceResponse updated = invoiceService.update(supplyReturn.id(), new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY_RETURN,
+                null,
+                null,
+                null,
+                supply.id(),
+                "RETURN-UPDATED",
+                LocalDate.now(),
+                null,
+                null,
+                "Return updated",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, new BigDecimal("3.00"), null, null, null))
+        ));
+
+        assertThat(updated.totalAmount()).isEqualByComparingTo("300.00");
+        assertThat(invoiceService.get(supply.id()).items().getFirst().availableQuantity()).isEqualByComparingTo("7.00");
+
+        assertThatThrownBy(() -> invoiceService.update(supplyReturn.id(), new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY_RETURN,
+                null,
+                null,
+                null,
+                supply.id(),
+                "RETURN-TOO-MUCH",
+                LocalDate.now(),
+                null,
+                null,
+                "Return too much",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, new BigDecimal("11.00"), null, null, null))
+        ))).hasMessageContaining("Return quantity exceeds available supply quantity");
     }
 
     @Test
@@ -393,5 +522,57 @@ class RimBtpApiApplicationTests {
                 .filter(stage -> stage.getStatus() != StageStatus.COMPLETED)
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private InvoiceDtos.InvoiceResponse createTestSupply(BigDecimal quantity) {
+        InvoiceDtos.InvoiceResponse template = invoiceService.list(0, 50, "SUPPLY").content().stream()
+                .filter(candidate -> candidate.projectId() != null)
+                .filter(candidate -> !candidate.items().isEmpty())
+                .findFirst()
+                .orElseThrow();
+        InvoiceDtos.InvoiceItemResponse templateItem = template.items().getFirst();
+        BigDecimal unitPrice = new BigDecimal("100.00");
+        return invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY,
+                template.supplierId(),
+                template.projectId(),
+                null,
+                null,
+                "TEST-SUPPLY-" + System.nanoTime(),
+                LocalDate.now(),
+                quantity.multiply(unitPrice),
+                template.currency(),
+                "Test supply",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+                        null,
+                        null,
+                        templateItem.categoryId(),
+                        templateItem.description(),
+                        quantity,
+                        templateItem.unit(),
+                        unitPrice,
+                        quantity.multiply(unitPrice)
+                ))
+        ));
+    }
+
+    private InvoiceDtos.InvoiceResponse createReturn(InvoiceDtos.InvoiceResponse supply, InvoiceDtos.InvoiceItemResponse sourceItem, BigDecimal quantity) {
+        return invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY_RETURN,
+                null,
+                null,
+                null,
+                supply.id(),
+                "RETURN-" + System.nanoTime(),
+                LocalDate.now(),
+                null,
+                null,
+                "Supplier return",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, quantity, null, null, null))
+        ));
     }
 }

@@ -73,9 +73,10 @@ public class ReportService {
         List<SupplierInvoice> invoices = referenceDataService.invoicesByProject(projectId);
         for (SupplierInvoice invoice : invoices) {
             BigDecimal consumed = referenceDataService.invoiceConsumedAmount(invoice.getId());
+            BigDecimal outgoing = referenceDataService.invoiceOutgoingAmount(invoice.getId());
             rows.merge(
                     invoice.getSupplier().getId(),
-                    new ReportDtos.SupplierBalanceRow(invoice.getSupplier().getId(), invoice.getSupplier().getName(), invoice.getTotalAmount(), consumed, invoice.getTotalAmount().subtract(consumed)),
+                    new ReportDtos.SupplierBalanceRow(invoice.getSupplier().getId(), invoice.getSupplier().getName(), invoice.getTotalAmount(), consumed, invoice.getTotalAmount().subtract(outgoing)),
                     (left, right) -> new ReportDtos.SupplierBalanceRow(
                             left.supplierId(),
                             left.supplierName(),

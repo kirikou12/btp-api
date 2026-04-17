@@ -91,6 +91,6 @@ public class DashboardService {
     }
 
     private BigDecimal remainingForItem(SupplierInvoiceItem item) {
-        return item.getTotalAmount().subtract(referenceDataService.invoiceItemConsumedAmount(item.getId(), null));
+        return item.getTotalAmount().subtract(referenceDataService.invoiceItemOutgoingAmount(item.getId(), null));
     }
 }
