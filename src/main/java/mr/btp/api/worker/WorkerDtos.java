@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public final class WorkerDtos {
 
@@ -16,6 +17,13 @@ public final class WorkerDtos {
             @NotBlank String name,
             @NotNull WorkerType type,
             Long projectId,
+            @NotNull @DecimalMin("0.00") BigDecimal plannedBudget,
+            List<WorkerStageBudgetRequest> stageBudgets
+    ) {
+    }
+
+    public record WorkerStageBudgetRequest(
+            @NotNull Long stageId,
             @NotNull @DecimalMin("0.00") BigDecimal plannedBudget
     ) {
     }
@@ -26,10 +34,18 @@ public final class WorkerDtos {
             WorkerType type,
             Long projectId,
             BigDecimal plannedBudget,
+            List<WorkerStageBudgetResponse> stageBudgets,
             BigDecimal paidAmount,
             BigDecimal remainingBudget,
             Instant createdAt,
             Instant updatedAt
+    ) {
+    }
+
+    public record WorkerStageBudgetResponse(
+            Long stageId,
+            String stageName,
+            BigDecimal plannedBudget
     ) {
     }
 

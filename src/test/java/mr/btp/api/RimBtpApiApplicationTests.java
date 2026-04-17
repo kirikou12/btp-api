@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -234,7 +235,8 @@ class RimBtpApiApplicationTests {
                 "Project mason",
                 WorkerType.MASON,
                 projectId,
-                new BigDecimal("1500.00")
+                new BigDecimal("1500.00"),
+                null
         ));
 
         assertThat(created.projectId()).isEqualTo(projectId);
@@ -243,11 +245,35 @@ class RimBtpApiApplicationTests {
                 "Project mason",
                 WorkerType.MASON,
                 null,
-                new BigDecimal("1750.00")
+                new BigDecimal("1750.00"),
+                null
         ));
 
         assertThat(updated.projectId()).isNull();
         assertThat(updated.plannedBudget()).isEqualByComparingTo("1750.00");
+    }
+
+    @Test
+    @Transactional
+    void shouldDistributeWorkerBudgetByProjectStages() {
+        ConstructionStage firstStage = stageRepository.findAll().stream().findFirst().orElseThrow();
+        List<ConstructionStage> projectStages = stageRepository.findByProjectIdOrderBySortOrderAsc(firstStage.getProject().getId());
+
+        WorkerDtos.WorkerResponse created = workerService.createWorker(new WorkerDtos.WorkerRequest(
+                "Distributed mason",
+                WorkerType.MASON,
+                firstStage.getProject().getId(),
+                new BigDecimal("0.00"),
+                projectStages.stream()
+                        .limit(2)
+                        .map(stage -> new WorkerDtos.WorkerStageBudgetRequest(stage.getId(), new BigDecimal("500.00")))
+                        .toList()
+        ));
+
+        assertThat(created.plannedBudget()).isEqualByComparingTo("1000.00");
+        assertThat(created.stageBudgets()).hasSize(2);
+        assertThat(created.stageBudgets()).extracting(WorkerDtos.WorkerStageBudgetResponse::stageId)
+                .containsExactlyElementsOf(projectStages.stream().limit(2).map(ConstructionStage::getId).toList());
     }
 
     @Test
