@@ -2,8 +2,8 @@ package mr.btp.api.project;
 
 import java.util.List;
 import mr.btp.api.common.exception.ApiException;
-import mr.btp.api.consumption.MaterialConsumptionRepository;
 import mr.btp.api.expense.DirectExpenseRepository;
+import mr.btp.api.invoice.SupplierInvoiceRepository;
 import mr.btp.api.worker.WorkerPaymentRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,20 +16,20 @@ public class StageTemplateService {
     private final ConstructionStageRepository stageRepository;
     private final ProjectRepository projectRepository;
     private final DirectExpenseRepository expenseRepository;
-    private final MaterialConsumptionRepository consumptionRepository;
+    private final SupplierInvoiceRepository invoiceRepository;
     private final WorkerPaymentRepository workerPaymentRepository;
 
     public StageTemplateService(StageTemplateRepository stageTemplateRepository,
                                 ConstructionStageRepository stageRepository,
                                 ProjectRepository projectRepository,
                                 DirectExpenseRepository expenseRepository,
-                                MaterialConsumptionRepository consumptionRepository,
+                                SupplierInvoiceRepository invoiceRepository,
                                 WorkerPaymentRepository workerPaymentRepository) {
         this.stageTemplateRepository = stageTemplateRepository;
         this.stageRepository = stageRepository;
         this.projectRepository = projectRepository;
         this.expenseRepository = expenseRepository;
-        this.consumptionRepository = consumptionRepository;
+        this.invoiceRepository = invoiceRepository;
         this.workerPaymentRepository = workerPaymentRepository;
     }
 
@@ -84,7 +84,7 @@ public class StageTemplateService {
         List<ConstructionStage> linkedStages = stageRepository.findByStageTemplateId(id);
         boolean hasRecordedCosts = linkedStages.stream().anyMatch(stage ->
                 expenseRepository.countByStageId(stage.getId()) > 0 ||
-                        consumptionRepository.countByStageId(stage.getId()) > 0 ||
+                        invoiceRepository.countByStageId(stage.getId()) > 0 ||
                         workerPaymentRepository.countByStage_Id(stage.getId()) > 0
         );
         if (hasRecordedCosts) {

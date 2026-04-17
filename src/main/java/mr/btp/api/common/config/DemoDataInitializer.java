@@ -7,8 +7,6 @@ import java.util.Map;
 import mr.btp.api.category.CategoryType;
 import mr.btp.api.category.ExpenseCategory;
 import mr.btp.api.category.ExpenseCategoryRepository;
-import mr.btp.api.consumption.MaterialConsumption;
-import mr.btp.api.consumption.MaterialConsumptionRepository;
 import mr.btp.api.expense.DirectExpense;
 import mr.btp.api.expense.DirectExpenseRepository;
 import mr.btp.api.invoice.InvoiceStatus;
@@ -54,7 +52,6 @@ public class DemoDataInitializer {
                                    SupplierRepository supplierRepository,
                                    SupplierInvoiceRepository invoiceRepository,
                                    SupplierInvoiceItemRepository invoiceItemRepository,
-                                   MaterialConsumptionRepository consumptionRepository,
                                    DirectExpenseRepository expenseRepository,
                                    WorkerRepository workerRepository,
                                    WorkerPaymentRepository workerPaymentRepository) {
@@ -127,19 +124,6 @@ public class DemoDataInitializer {
                 "Concrete blocks", "800.00", "units", "2.50", "2000.00");
             SupplierInvoiceItem villaSand = saveInvoiceItem(invoiceItemRepository, villaInvoice2, categories.get("Sand"),
                 "River sand", "20.00", "m3", "60.00", "1200.00");
-
-            saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Foundation"), villaCement, categories.get("Cement"),
-                "25.00", "500.00", today.minusDays(48), "Foundation slab concrete");
-            saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Foundation"), villaSteel, categories.get("Steel"),
-                "100.00", "1000.00", today.minusDays(45), "Footings and reinforced beams");
-            saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Elevation"), villaCement, categories.get("Cement"),
-                "50.00", "1000.00", today.minusDays(20), "Block wall mortar");
-            saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Elevation"), villaSteel, categories.get("Steel"),
-                "150.00", "1500.00", today.minusDays(15), "Columns and lintels");
-            saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Elevation"), villaBlocks, categories.get("Concrete Blocks"),
-                "260.00", "650.00", today.minusDays(12), "Elevation wall sections");
-            saveConsumption(consumptionRepository, villaHorizon, villaStages.get("Elevation"), villaSand, categories.get("Sand"),
-                "8.00", "480.00", today.minusDays(10), "Mortar and render mix");
 
             Worker foundationMason = saveWorker(workerRepository, "Mohamed Diallo", WorkerType.MASON, "5000.00");
             Worker electrician = saveWorker(workerRepository, "Sidi Ahmed", WorkerType.ELECTRICIAN, "3000.00");
@@ -273,27 +257,6 @@ public class DemoDataInitializer {
         item.setUnitPrice(amount(unitPrice));
         item.setTotalAmount(amount(totalAmount));
         return repository.save(item);
-    }
-
-    private void saveConsumption(MaterialConsumptionRepository repository,
-                                 Project project,
-                                 ConstructionStage stage,
-                                 SupplierInvoiceItem item,
-                                 ExpenseCategory category,
-                                 String quantityUsed,
-                                 String amountUsed,
-                                 LocalDate date,
-                                 String notes) {
-        MaterialConsumption consumption = new MaterialConsumption();
-        consumption.setProject(project);
-        consumption.setStage(stage);
-        consumption.setInvoiceItem(item);
-        consumption.setCategory(category);
-        consumption.setQuantityUsed(amount(quantityUsed));
-        consumption.setAmountUsed(amount(amountUsed));
-        consumption.setConsumptionDate(date);
-        consumption.setNotes(notes);
-        repository.save(consumption);
     }
 
     private void saveExpense(DirectExpenseRepository repository,

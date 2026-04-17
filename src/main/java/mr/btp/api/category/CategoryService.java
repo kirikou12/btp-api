@@ -1,7 +1,6 @@
 package mr.btp.api.category;
 
 import java.util.List;
-import mr.btp.api.consumption.MaterialConsumptionRepository;
 import mr.btp.api.expense.DirectExpenseRepository;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
 import mr.btp.api.common.exception.ApiException;
@@ -13,16 +12,13 @@ public class CategoryService {
 
     private final ExpenseCategoryRepository categoryRepository;
     private final DirectExpenseRepository directExpenseRepository;
-    private final MaterialConsumptionRepository materialConsumptionRepository;
     private final SupplierInvoiceItemRepository supplierInvoiceItemRepository;
 
     public CategoryService(ExpenseCategoryRepository categoryRepository,
                            DirectExpenseRepository directExpenseRepository,
-                           MaterialConsumptionRepository materialConsumptionRepository,
                            SupplierInvoiceItemRepository supplierInvoiceItemRepository) {
         this.categoryRepository = categoryRepository;
         this.directExpenseRepository = directExpenseRepository;
-        this.materialConsumptionRepository = materialConsumptionRepository;
         this.supplierInvoiceItemRepository = supplierInvoiceItemRepository;
     }
 
@@ -55,10 +51,9 @@ public class CategoryService {
         }
 
         long directExpenseCount = directExpenseRepository.countByCategoryId(id);
-        long materialConsumptionCount = materialConsumptionRepository.countByCategoryId(id);
         long supplierInvoiceItemCount = supplierInvoiceItemRepository.countByCategoryId(id);
 
-        if (directExpenseCount > 0 || materialConsumptionCount > 0 || supplierInvoiceItemCount > 0) {
+        if (directExpenseCount > 0 || supplierInvoiceItemCount > 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Category is in use");
         }
 

@@ -47,20 +47,20 @@ public class DashboardService {
         BigDecimal totalBudget = projectRepository.findAll().stream().map(Project::getBudget).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal estimatedSale = projectRepository.findAll().stream().map(Project::getEstimatedSalePrice).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal direct = expenseRepository.findAll().stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal material = USAGE_INVOICE_TYPES.stream()
+        BigDecimal usageCost = USAGE_INVOICE_TYPES.stream()
                 .flatMap(invoiceType -> invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream())
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(SupplierInvoiceItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal workers = workerPaymentRepository.findAll().stream().map(payment -> payment.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal actual = direct.add(material).add(workers);
+        BigDecimal actual = direct.add(usageCost).add(workers);
         BigDecimal remainingSupplier = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.SUPPLY).stream()
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(this::remainingForItem)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         long active = projectRepository.findAll().stream().filter(project -> project.getStatus() == ProjectStatus.IN_PROGRESS).count();
         return new DashboardDtos.DashboardResponse(
-                direct, material, workers, actual, totalBudget, totalBudget.subtract(actual), estimatedSale,
+                direct, usageCost, workers, actual, totalBudget, totalBudget.subtract(actual), estimatedSale,
                 estimatedSale.subtract(actual), active, remainingSupplier
         );
     }
@@ -69,16 +69,16 @@ public class DashboardService {
     public DashboardDtos.DashboardResponse byProject(Long projectId) {
         Project project = referenceDataService.getProject(projectId);
         BigDecimal direct = referenceDataService.expensesByProject(projectId).stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal material = referenceDataService.usageItemsByProject(projectId).stream().map(SupplierInvoiceItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal usageCost = referenceDataService.usageItemsByProject(projectId).stream().map(SupplierInvoiceItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal workers = referenceDataService.workerPaymentsByProject(projectId).stream().map(payment -> payment.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal actual = direct.add(material).add(workers);
+        BigDecimal actual = direct.add(usageCost).add(workers);
         BigDecimal remainingSupplier = referenceDataService.invoicesByProject(projectId).stream()
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(this::remainingForItem)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new DashboardDtos.DashboardResponse(
                 direct,
-                material,
+                usageCost,
                 workers,
                 actual,
                 project.getBudget(),

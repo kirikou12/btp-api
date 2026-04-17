@@ -3,8 +3,6 @@ package mr.btp.api.common.service;
 import mr.btp.api.category.ExpenseCategory;
 import mr.btp.api.category.ExpenseCategoryRepository;
 import mr.btp.api.common.exception.ApiException;
-import mr.btp.api.consumption.MaterialConsumption;
-import mr.btp.api.consumption.MaterialConsumptionRepository;
 import mr.btp.api.expense.DirectExpense;
 import mr.btp.api.expense.DirectExpenseRepository;
 import mr.btp.api.invoice.SupplierInvoice;
@@ -46,7 +44,6 @@ public class ReferenceDataService {
     private final DirectExpenseRepository expenseRepository;
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
-    private final MaterialConsumptionRepository consumptionRepository;
     private final WorkerRepository workerRepository;
     private final WorkerPaymentRepository workerPaymentRepository;
 
@@ -59,7 +56,6 @@ public class ReferenceDataService {
                                 DirectExpenseRepository expenseRepository,
                                 SupplierInvoiceRepository invoiceRepository,
                                 SupplierInvoiceItemRepository invoiceItemRepository,
-                                MaterialConsumptionRepository consumptionRepository,
                                 WorkerRepository workerRepository,
                                 WorkerPaymentRepository workerPaymentRepository) {
         this.userRepository = userRepository;
@@ -71,7 +67,6 @@ public class ReferenceDataService {
         this.expenseRepository = expenseRepository;
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
-        this.consumptionRepository = consumptionRepository;
         this.workerRepository = workerRepository;
         this.workerPaymentRepository = workerPaymentRepository;
     }
@@ -110,10 +105,6 @@ public class ReferenceDataService {
 
     public SupplierInvoiceItem getInvoiceItem(Long id) {
         return invoiceItemRepository.findById(id).orElseThrow(() -> notFound("Supplier invoice item"));
-    }
-
-    public MaterialConsumption getConsumption(Long id) {
-        return consumptionRepository.findById(id).orElseThrow(() -> notFound("Material consumption"));
     }
 
     public Worker getWorker(Long id) {
@@ -170,10 +161,6 @@ public class ReferenceDataService {
         return expenseRepository.findByProjectIdOrderByExpenseDateDesc(projectId);
     }
 
-    public List<MaterialConsumption> consumptionsByProject(Long projectId) {
-        return consumptionRepository.findByProjectIdOrderByConsumptionDateDesc(projectId);
-    }
-
     public List<WorkerPayment> workerPaymentsByProject(Long projectId) {
         return workerPaymentRepository.findByStage_Project_IdOrderByPaymentDateDesc(projectId);
     }
@@ -199,7 +186,7 @@ public class ReferenceDataService {
                 .filter(expense -> expense.getStage() != null && expense.getStage().getId().equals(stageId))
                 .map(DirectExpense::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal consumptions = USAGE_INVOICE_TYPES.stream()
+        BigDecimal usageCost = USAGE_INVOICE_TYPES.stream()
                 .flatMap(invoiceType -> invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream())
                 .filter(invoice -> invoice.getStage() != null && invoice.getStage().getId().equals(stageId))
                 .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
@@ -208,7 +195,7 @@ public class ReferenceDataService {
         BigDecimal workerPayments = workerPaymentRepository.findByStage_Id(stageId).stream()
                 .map(WorkerPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return expenses.add(consumptions).add(workerPayments);
+        return expenses.add(usageCost).add(workerPayments);
     }
 
     private ApiException notFound(String resource) {
