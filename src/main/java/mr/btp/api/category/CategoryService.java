@@ -1,18 +1,29 @@
 package mr.btp.api.category;
 
+import java.util.List;
+import mr.btp.api.consumption.MaterialConsumptionRepository;
+import mr.btp.api.expense.DirectExpenseRepository;
+import mr.btp.api.invoice.SupplierInvoiceItemRepository;
 import mr.btp.api.common.exception.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 public class CategoryService {
 
     private final ExpenseCategoryRepository categoryRepository;
+    private final DirectExpenseRepository directExpenseRepository;
+    private final MaterialConsumptionRepository materialConsumptionRepository;
+    private final SupplierInvoiceItemRepository supplierInvoiceItemRepository;
 
-    public CategoryService(ExpenseCategoryRepository categoryRepository) {
+    public CategoryService(ExpenseCategoryRepository categoryRepository,
+                           DirectExpenseRepository directExpenseRepository,
+                           MaterialConsumptionRepository materialConsumptionRepository,
+                           SupplierInvoiceItemRepository supplierInvoiceItemRepository) {
         this.categoryRepository = categoryRepository;
+        this.directExpenseRepository = directExpenseRepository;
+        this.materialConsumptionRepository = materialConsumptionRepository;
+        this.supplierInvoiceItemRepository = supplierInvoiceItemRepository;
     }
 
     public List<CategoryDtos.CategoryResponse> list() {
@@ -33,6 +44,25 @@ public class CategoryService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Category not found"));
         apply(category, request);
         return toResponse(categoryRepository.save(category));
+    }
+
+    public void delete(Long id) {
+        ExpenseCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Category not found"));
+
+        if (category.isSystem()) {
+            throw new ApiException(HttpStatus.CONFLICT, "System categories cannot be deleted");
+        }
+
+        long directExpenseCount = directExpenseRepository.countByCategoryId(id);
+        long materialConsumptionCount = materialConsumptionRepository.countByCategoryId(id);
+        long supplierInvoiceItemCount = supplierInvoiceItemRepository.countByCategoryId(id);
+
+        if (directExpenseCount > 0 || materialConsumptionCount > 0 || supplierInvoiceItemCount > 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Category is in use");
+        }
+
+        categoryRepository.delete(category);
     }
 
     private void apply(ExpenseCategory category, CategoryDtos.CategoryRequest request) {

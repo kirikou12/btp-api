@@ -7,4 +7,5 @@ public interface MaterialConsumptionRepository extends JpaRepository<MaterialCon
     List<MaterialConsumption> findByProjectIdOrderByConsumptionDateDesc(Long projectId);
     List<MaterialConsumption> findByInvoiceItemId(Long invoiceItemId);
     long countByStageId(Long stageId);
+    long countByCategoryId(Long categoryId);
 }
