@@ -274,6 +274,21 @@ class RimBtpApiApplicationTests {
         assertThat(created.stageBudgets()).hasSize(2);
         assertThat(created.stageBudgets()).extracting(WorkerDtos.WorkerStageBudgetResponse::stageId)
                 .containsExactlyElementsOf(projectStages.stream().limit(2).map(ConstructionStage::getId).toList());
+
+        WorkerDtos.WorkerResponse updated = workerService.updateWorker(created.id(), new WorkerDtos.WorkerRequest(
+                "Distributed mason",
+                WorkerType.MASON,
+                firstStage.getProject().getId(),
+                new BigDecimal("0.00"),
+                projectStages.stream()
+                        .limit(2)
+                        .map(stage -> new WorkerDtos.WorkerStageBudgetRequest(stage.getId(), new BigDecimal("600.00")))
+                        .toList()
+        ));
+
+        assertThat(updated.plannedBudget()).isEqualByComparingTo("1200.00");
+        assertThat(updated.stageBudgets()).extracting(WorkerDtos.WorkerStageBudgetResponse::plannedBudget)
+                .containsExactly(new BigDecimal("600.00"), new BigDecimal("600.00"));
     }
 
     @Test

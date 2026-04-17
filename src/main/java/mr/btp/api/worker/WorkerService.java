@@ -121,6 +121,7 @@ public class WorkerService {
 
     private void applyStageBudgets(Worker worker, WorkerDtos.WorkerRequest request) {
         workerStageBudgetRepository.deleteByWorker_Id(worker.getId());
+        workerStageBudgetRepository.flush();
         if (request.stageBudgets() == null || request.stageBudgets().isEmpty()) {
             return;
         }
