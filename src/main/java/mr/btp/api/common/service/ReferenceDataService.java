@@ -11,6 +11,7 @@ import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
 import mr.btp.api.invoice.SupplierInvoiceRepository;
+import mr.btp.api.invoice.InvoiceType;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.ConstructionStageRepository;
 import mr.btp.api.project.Project;
@@ -122,9 +123,8 @@ public class ReferenceDataService {
     }
 
     public BigDecimal invoiceItemConsumedAmount(Long invoiceItemId, Long excludingConsumptionId) {
-        return consumptionRepository.findByInvoiceItemId(invoiceItemId).stream()
-                .filter(consumption -> excludingConsumptionId == null || !consumption.getId().equals(excludingConsumptionId))
-                .map(MaterialConsumption::getAmountUsed)
+        return invoiceItemRepository.findBySourceSupplyItemId(invoiceItemId).stream()
+                .map(SupplierInvoiceItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -156,7 +156,19 @@ public class ReferenceDataService {
     }
 
     public List<SupplierInvoice> invoicesByProject(Long projectId) {
-        return invoiceRepository.findByProjectIdOrProjectIdIsNullOrderByInvoiceDateDesc(projectId);
+        return invoiceRepository.findByProjectIdOrProjectIdIsNullOrderByInvoiceDateDesc(projectId).stream()
+                .filter(invoice -> invoice.getInvoiceType() == InvoiceType.SUPPLY)
+                .toList();
+    }
+
+    public List<SupplierInvoiceItem> usageItemsByProject(Long projectId) {
+        return invoiceRepository.findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, InvoiceType.USAGE).stream()
+                .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
+                .toList();
+    }
+
+    public List<SupplierInvoice> usageInvoicesByProject(Long projectId) {
+        return invoiceRepository.findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, InvoiceType.USAGE);
     }
 
     public BigDecimal stageActualCost(Long stageId) {
@@ -164,9 +176,10 @@ public class ReferenceDataService {
                 .filter(expense -> expense.getStage() != null && expense.getStage().getId().equals(stageId))
                 .map(DirectExpense::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal consumptions = consumptionRepository.findAll().stream()
-                .filter(consumption -> consumption.getStage().getId().equals(stageId))
-                .map(MaterialConsumption::getAmountUsed)
+        BigDecimal consumptions = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.USAGE).stream()
+                .filter(invoice -> invoice.getStage() != null && invoice.getStage().getId().equals(stageId))
+                .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
+                .map(SupplierInvoiceItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal workerPayments = workerPaymentRepository.findByStage_Id(stageId).stream()
                 .map(WorkerPayment::getAmount)

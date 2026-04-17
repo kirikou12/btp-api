@@ -3,6 +3,8 @@ package mr.btp.api.project;
 import jakarta.validation.Valid;
 import java.util.List;
 import mr.btp.api.common.dto.PageResponse;
+import mr.btp.api.invoice.InvoiceDtos;
+import mr.btp.api.invoice.InvoiceService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,9 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final InvoiceService invoiceService;
 
-    public ProjectController(ProjectService projectService) {
+    public ProjectController(ProjectService projectService, InvoiceService invoiceService) {
         this.projectService = projectService;
+        this.invoiceService = invoiceService;
     }
 
     @GetMapping("/api/projects")
@@ -45,6 +49,12 @@ public class ProjectController {
     @GetMapping("/api/projects/{id}/stages")
     public List<ProjectDtos.StageResponse> listStages(@PathVariable Long id) {
         return projectService.listStages(id);
+    }
+
+    @GetMapping("/api/projects/{id}/usage-invoices")
+    public List<InvoiceDtos.InvoiceResponse> listUsageInvoices(@PathVariable Long id,
+                                                               @RequestParam(required = false) Long stageId) {
+        return invoiceService.usageInvoicesByProject(id, stageId);
     }
 
     @PutMapping("/api/project-stages/{id}")

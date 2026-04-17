@@ -2,6 +2,7 @@ package mr.btp.api.invoice;
 
 import jakarta.validation.Valid;
 import mr.btp.api.common.dto.PageResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,8 +23,9 @@ public class InvoiceController {
 
     @GetMapping("/api/supplier-invoices")
     public PageResponse<InvoiceDtos.InvoiceResponse> list(@RequestParam(defaultValue = "0") int page,
-                                                          @RequestParam(defaultValue = "20") int size) {
-        return invoiceService.list(page, size);
+                                                          @RequestParam(defaultValue = "20") int size,
+                                                          @RequestParam(required = false) String type) {
+        return invoiceService.list(page, size, type);
     }
 
     @PostMapping("/api/supplier-invoices")
@@ -39,6 +41,21 @@ public class InvoiceController {
     @PutMapping("/api/supplier-invoices/{id}")
     public InvoiceDtos.InvoiceResponse update(@PathVariable Long id, @Valid @RequestBody InvoiceDtos.InvoiceRequest request) {
         return invoiceService.update(id, request);
+    }
+
+    @PostMapping("/api/usage-invoices")
+    public InvoiceDtos.InvoiceResponse createUsage(@Valid @RequestBody InvoiceDtos.UsageInvoiceRequest request) {
+        return invoiceService.createUsage(request);
+    }
+
+    @PutMapping("/api/usage-invoices/{id}")
+    public InvoiceDtos.InvoiceResponse updateUsage(@PathVariable Long id, @Valid @RequestBody InvoiceDtos.UsageInvoiceRequest request) {
+        return invoiceService.updateUsage(id, request);
+    }
+
+    @DeleteMapping("/api/usage-invoices/{id}")
+    public void deleteUsage(@PathVariable Long id) {
+        invoiceService.deleteUsage(id);
     }
 
     @PostMapping("/api/supplier-invoice-items")

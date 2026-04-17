@@ -31,8 +31,8 @@ public class ReportService {
                 totals.computeIfPresent(expense.getStage().getId(), (key, value) -> value.add(expense.getAmount()));
             }
         });
-        referenceDataService.consumptionsByProject(projectId).forEach(consumption ->
-                totals.computeIfPresent(consumption.getStage().getId(), (key, value) -> value.add(consumption.getAmountUsed()))
+        referenceDataService.usageItemsByProject(projectId).forEach(item ->
+                totals.computeIfPresent(item.getInvoice().getStage().getId(), (key, value) -> value.add(item.getTotalAmount()))
         );
         referenceDataService.workerPaymentsByProject(projectId).forEach(payment ->
                 totals.computeIfPresent(payment.getStage().getId(), (key, value) -> value.add(payment.getAmount()))
@@ -50,9 +50,9 @@ public class ReportService {
                 new ReportDtos.CategoryCostRow(expense.getCategory().getId(), expense.getCategory().getName(), expense.getAmount()),
                 (left, right) -> new ReportDtos.CategoryCostRow(left.categoryId(), left.categoryName(), left.totalCost().add(right.totalCost()))
         ));
-        referenceDataService.consumptionsByProject(projectId).forEach(consumption -> rows.merge(
-                consumption.getCategory().getId(),
-                new ReportDtos.CategoryCostRow(consumption.getCategory().getId(), consumption.getCategory().getName(), consumption.getAmountUsed()),
+        referenceDataService.usageItemsByProject(projectId).forEach(item -> rows.merge(
+                item.getCategory().getId(),
+                new ReportDtos.CategoryCostRow(item.getCategory().getId(), item.getCategory().getName(), item.getTotalAmount()),
                 (left, right) -> new ReportDtos.CategoryCostRow(left.categoryId(), left.categoryName(), left.totalCost().add(right.totalCost()))
         ));
         referenceDataService.workerPaymentsByProject(projectId).forEach(payment -> {
@@ -94,8 +94,8 @@ public class ReportService {
         referenceDataService.expensesByProject(projectId).forEach(expense -> rows.add(
                 new ReportDtos.ActivityFeedRow("EXPENSE", expense.getDescription(), expense.getAmount(), expense.getExpenseDate(), expense.getCategory().getName())
         ));
-        referenceDataService.consumptionsByProject(projectId).forEach(consumption -> rows.add(
-                new ReportDtos.ActivityFeedRow("CONSUMPTION", consumption.getCategory().getName(), consumption.getAmountUsed(), consumption.getConsumptionDate(), consumption.getStage().getName())
+        referenceDataService.usageInvoicesByProject(projectId).forEach(invoice -> rows.add(
+                new ReportDtos.ActivityFeedRow("USAGE_INVOICE", invoice.getReference() == null ? "Usage invoice" : invoice.getReference(), invoice.getTotalAmount(), invoice.getInvoiceDate(), usageInvoiceDetails(invoice))
         ));
         referenceDataService.workerPaymentsByProject(projectId).forEach(payment -> rows.add(
                 new ReportDtos.ActivityFeedRow("WORKER_PAYMENT", payment.getWorker().getName(), payment.getAmount(), payment.getPaymentDate(), workerPaymentDetails(payment))
@@ -109,5 +109,9 @@ public class ReportService {
 
     private String workerPaymentDetails(WorkerPayment payment) {
         return payment.getStage().getName() + " • " + payment.getWorker().getType().name();
+    }
+
+    private String usageInvoiceDetails(SupplierInvoice invoice) {
+        return invoice.getStage().getName() + " • " + invoice.getSupplier().getName();
     }
 }

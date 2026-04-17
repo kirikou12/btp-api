@@ -22,6 +22,10 @@ public class SupplierInvoiceItem extends BaseEntity {
     @JoinColumn(name = "category_id", nullable = false)
     private ExpenseCategory category;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_supply_item_id")
+    private SupplierInvoiceItem sourceSupplyItem;
+
     @Column(nullable = false)
     private String description;
 
@@ -50,6 +54,14 @@ public class SupplierInvoiceItem extends BaseEntity {
 
     public void setCategory(ExpenseCategory category) {
         this.category = category;
+    }
+
+    public SupplierInvoiceItem getSourceSupplyItem() {
+        return sourceSupplyItem;
+    }
+
+    public void setSourceSupplyItem(SupplierInvoiceItem sourceSupplyItem) {
+        this.sourceSupplyItem = sourceSupplyItem;
     }
 
     public String getDescription() {

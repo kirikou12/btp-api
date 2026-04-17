@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import mr.btp.api.common.entity.BaseEntity;
+import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.Project;
 import mr.btp.api.supplier.Supplier;
 
@@ -25,6 +26,18 @@ public class SupplierInvoice extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id")
     private Project project;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invoice_type", nullable = false)
+    private InvoiceType invoiceType = InvoiceType.SUPPLY;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_supply_invoice_id")
+    private SupplierInvoice sourceSupplyInvoice;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stage_id")
+    private ConstructionStage stage;
 
     private String reference;
 
@@ -61,6 +74,30 @@ public class SupplierInvoice extends BaseEntity {
 
     public void setProject(Project project) {
         this.project = project;
+    }
+
+    public InvoiceType getInvoiceType() {
+        return invoiceType;
+    }
+
+    public void setInvoiceType(InvoiceType invoiceType) {
+        this.invoiceType = invoiceType;
+    }
+
+    public SupplierInvoice getSourceSupplyInvoice() {
+        return sourceSupplyInvoice;
+    }
+
+    public void setSourceSupplyInvoice(SupplierInvoice sourceSupplyInvoice) {
+        this.sourceSupplyInvoice = sourceSupplyInvoice;
+    }
+
+    public ConstructionStage getStage() {
+        return stage;
+    }
+
+    public void setStage(ConstructionStage stage) {
+        this.stage = stage;
     }
 
     public String getReference() {

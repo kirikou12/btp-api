@@ -2,6 +2,8 @@ package mr.btp.api.dashboard;
 
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.expense.DirectExpenseRepository;
+import mr.btp.api.invoice.InvoiceType;
+import mr.btp.api.invoice.SupplierInvoiceRepository;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
 import mr.btp.api.project.Project;
@@ -18,17 +20,20 @@ public class DashboardService {
 
     private final ProjectRepository projectRepository;
     private final DirectExpenseRepository expenseRepository;
+    private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
     private final WorkerPaymentRepository workerPaymentRepository;
     private final ReferenceDataService referenceDataService;
 
     public DashboardService(ProjectRepository projectRepository,
                             DirectExpenseRepository expenseRepository,
+                            SupplierInvoiceRepository invoiceRepository,
                             SupplierInvoiceItemRepository invoiceItemRepository,
                             WorkerPaymentRepository workerPaymentRepository,
                             ReferenceDataService referenceDataService) {
         this.projectRepository = projectRepository;
         this.expenseRepository = expenseRepository;
+        this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.workerPaymentRepository = workerPaymentRepository;
         this.referenceDataService = referenceDataService;
@@ -39,12 +44,14 @@ public class DashboardService {
         BigDecimal totalBudget = projectRepository.findAll().stream().map(Project::getBudget).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal estimatedSale = projectRepository.findAll().stream().map(Project::getEstimatedSalePrice).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal direct = expenseRepository.findAll().stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal material = invoiceItemRepository.findAll().stream()
-                .map(item -> referenceDataService.invoiceItemConsumedAmount(item.getId(), null))
+        BigDecimal material = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.USAGE).stream()
+                .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
+                .map(SupplierInvoiceItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal workers = workerPaymentRepository.findAll().stream().map(payment -> payment.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal actual = direct.add(material).add(workers);
-        BigDecimal remainingSupplier = invoiceItemRepository.findAll().stream()
+        BigDecimal remainingSupplier = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.SUPPLY).stream()
+                .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
                 .map(this::remainingForItem)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         long active = projectRepository.findAll().stream().filter(project -> project.getStatus() == ProjectStatus.IN_PROGRESS).count();
@@ -58,7 +65,7 @@ public class DashboardService {
     public DashboardDtos.DashboardResponse byProject(Long projectId) {
         Project project = referenceDataService.getProject(projectId);
         BigDecimal direct = referenceDataService.expensesByProject(projectId).stream().map(expense -> expense.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal material = referenceDataService.consumptionsByProject(projectId).stream().map(consumption -> consumption.getAmountUsed()).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal material = referenceDataService.usageItemsByProject(projectId).stream().map(SupplierInvoiceItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal workers = referenceDataService.workerPaymentsByProject(projectId).stream().map(payment -> payment.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal actual = direct.add(material).add(workers);
         BigDecimal remainingSupplier = referenceDataService.invoicesByProject(projectId).stream()

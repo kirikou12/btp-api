@@ -5,6 +5,8 @@ import mr.btp.api.consumption.ConsumptionDtos;
 import mr.btp.api.consumption.MaterialConsumptionService;
 import mr.btp.api.invoice.InvoiceDtos;
 import mr.btp.api.invoice.InvoiceService;
+import mr.btp.api.invoice.InvoiceStatus;
+import mr.btp.api.invoice.InvoiceType;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.ConstructionStageRepository;
 import mr.btp.api.project.StageStatus;
@@ -48,6 +50,89 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    @Transactional
+    void shouldCreateUsageInvoiceWithMultipleLinesAndReduceSupplyAvailability() {
+        InvoiceDtos.InvoiceResponse supply = invoiceService.list(0, 50, "SUPPLY").content().stream()
+                .filter(candidate -> candidate.projectId() != null)
+                .filter(candidate -> candidate.items().stream().filter(item -> item.availableQuantity().compareTo(BigDecimal.ONE) >= 0).count() >= 2)
+                .findFirst()
+                .orElseThrow();
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
+
+        InvoiceDtos.InvoiceResponse usage = invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                supply.id(),
+                supply.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "Two material usage",
+                null,
+                InvoiceStatus.CONFIRMED,
+                supply.items().stream()
+                        .filter(item -> item.availableQuantity().compareTo(BigDecimal.ONE) >= 0)
+                        .limit(2)
+                        .map(item -> new InvoiceDtos.UsageInvoiceItemRequest(item.id(), BigDecimal.ONE))
+                        .toList()
+        ));
+
+        assertThat(usage.invoiceType()).isEqualTo(InvoiceType.USAGE);
+        assertThat(usage.sourceSupplyInvoiceId()).isEqualTo(supply.id());
+        assertThat(usage.stageId()).isEqualTo(activeStage.getId());
+        assertThat(usage.items()).hasSize(2);
+        assertThat(usage.totalAmount()).isEqualByComparingTo(
+                usage.items().stream().map(InvoiceDtos.InvoiceItemResponse::unitPrice).reduce(BigDecimal.ZERO, BigDecimal::add)
+        );
+
+        InvoiceDtos.InvoiceResponse refreshedSupply = invoiceService.get(supply.id());
+        usage.items().forEach(usageItem -> {
+            InvoiceDtos.InvoiceItemResponse before = supply.items().stream()
+                    .filter(item -> item.id().equals(usageItem.sourceSupplyItemId()))
+                    .findFirst()
+                    .orElseThrow();
+            InvoiceDtos.InvoiceItemResponse after = refreshedSupply.items().stream()
+                    .filter(item -> item.id().equals(usageItem.sourceSupplyItemId()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(after.availableQuantity()).isEqualByComparingTo(before.availableQuantity().subtract(BigDecimal.ONE));
+        });
+    }
+
+    @Test
+    @Transactional
+    void shouldRejectUsageInvoiceAsSource() {
+        InvoiceDtos.InvoiceResponse source = invoiceService.list(0, 50, "SUPPLY").content().stream()
+                .filter(candidate -> candidate.projectId() != null)
+                .filter(candidate -> candidate.items().stream().anyMatch(item -> item.availableQuantity().compareTo(BigDecimal.ONE) >= 0))
+                .findFirst()
+                .orElseThrow();
+        ConstructionStage activeStage = activeStageForProject(source.projectId());
+        InvoiceDtos.InvoiceItemResponse sourceItem = source.items().stream()
+                .filter(item -> item.availableQuantity().compareTo(BigDecimal.ONE) >= 0)
+                .findFirst()
+                .orElseThrow();
+        InvoiceDtos.InvoiceResponse usage = invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                source.id(),
+                source.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "Usage source guard setup",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.UsageInvoiceItemRequest(sourceItem.id(), BigDecimal.ONE))
+        ));
+
+        assertThatThrownBy(() -> invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                usage.id(),
+                source.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "Wrong source invoice",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.UsageInvoiceItemRequest(sourceItem.id(), BigDecimal.ONE))
+        ))).hasMessageContaining("SUPPLY invoice");
+    }
 
     @Test
     void shouldPreventOverConsumption() {
@@ -180,6 +265,13 @@ class RimBtpApiApplicationTests {
     private ConstructionStage stageByName(Long projectId, String stageName) {
         return stageRepository.findByProjectIdOrderBySortOrderAsc(projectId).stream()
                 .filter(stage -> stageName.equals(stage.getName()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private ConstructionStage activeStageForProject(Long projectId) {
+        return stageRepository.findByProjectIdOrderBySortOrderAsc(projectId).stream()
+                .filter(stage -> stage.getStatus() != StageStatus.COMPLETED)
                 .findFirst()
                 .orElseThrow();
     }

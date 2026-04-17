@@ -16,6 +16,7 @@ public final class InvoiceDtos {
     }
 
     public record InvoiceRequest(
+            InvoiceType invoiceType,
             @NotNull Long supplierId,
             Long projectId,
             String reference,
@@ -31,8 +32,13 @@ public final class InvoiceDtos {
 
     public record InvoiceResponse(
             Long id,
+            InvoiceType invoiceType,
             Long supplierId,
             Long projectId,
+            Long stageId,
+            String stageName,
+            Long sourceSupplyInvoiceId,
+            String sourceSupplyReference,
             String supplierName,
             String reference,
             LocalDate invoiceDate,
@@ -49,6 +55,7 @@ public final class InvoiceDtos {
 
     public record InvoiceItemUpsertRequest(
             Long invoiceId,
+            Long sourceSupplyItemId,
             @NotNull Long categoryId,
             @NotBlank String description,
             BigDecimal quantity,
@@ -61,6 +68,7 @@ public final class InvoiceDtos {
     public record InvoiceItemResponse(
             Long id,
             Long invoiceId,
+            Long sourceSupplyItemId,
             Long categoryId,
             String categoryName,
             String description,
@@ -69,7 +77,26 @@ public final class InvoiceDtos {
             BigDecimal unitPrice,
             BigDecimal totalAmount,
             BigDecimal consumedAmount,
-            BigDecimal remainingAmount
+            BigDecimal remainingAmount,
+            BigDecimal availableQuantity
+    ) {
+    }
+
+    public record UsageInvoiceRequest(
+            @NotNull Long sourceSupplyInvoiceId,
+            @NotNull Long projectId,
+            @NotNull Long stageId,
+            @NotNull LocalDate invoiceDate,
+            String notes,
+            String documentRef,
+            @NotNull InvoiceStatus status,
+            @Valid @NotEmpty List<UsageInvoiceItemRequest> items
+    ) {
+    }
+
+    public record UsageInvoiceItemRequest(
+            @NotNull Long sourceSupplyItemId,
+            @NotNull @DecimalMin("0.00") BigDecimal quantityUsed
     ) {
     }
 }

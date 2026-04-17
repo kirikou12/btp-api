@@ -4,6 +4,8 @@ import mr.btp.api.category.CategoryType;
 import mr.btp.api.common.dto.PageResponse;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
+import mr.btp.api.project.ConstructionStage;
+import mr.btp.api.project.StageStatus;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class InvoiceService {
@@ -29,7 +34,22 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public PageResponse<InvoiceDtos.InvoiceResponse> list(int page, int size) {
-        return PageResponse.from(invoiceRepository.findAll(PageRequest.of(page, size)).map(this::toResponse));
+        return list(page, size, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InvoiceDtos.InvoiceResponse> list(int page, int size, String type) {
+        if (type == null || type.isBlank() || "ALL".equalsIgnoreCase(type)) {
+            return PageResponse.from(invoiceRepository.findAll(PageRequest.of(page, size)).map(this::toResponse));
+        }
+        InvoiceType invoiceType = InvoiceType.valueOf(type.trim().toUpperCase());
+        List<InvoiceDtos.InvoiceResponse> rows = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream()
+                .skip((long) page * size)
+                .limit(size)
+                .map(this::toResponse)
+                .toList();
+        long total = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).size();
+        return new PageResponse<>(rows, page, size, total, (int) Math.ceil((double) total / size));
     }
 
     @Transactional(readOnly = true)
@@ -37,8 +57,28 @@ public class InvoiceService {
         return toResponse(referenceDataService.getInvoice(id));
     }
 
+    @Transactional(readOnly = true)
+    public List<InvoiceDtos.InvoiceResponse> usageInvoicesByProject(Long projectId, Long stageId) {
+        referenceDataService.getProject(projectId);
+        if (stageId != null) {
+            ConstructionStage stage = referenceDataService.getStage(stageId);
+            if (!stage.getProject().getId().equals(projectId)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
+            }
+            return invoiceRepository.findByProjectIdAndStageIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, stageId, InvoiceType.USAGE).stream()
+                    .map(this::toResponse)
+                    .toList();
+        }
+        return invoiceRepository.findByProjectIdAndInvoiceTypeOrderByInvoiceDateDescIdDesc(projectId, InvoiceType.USAGE).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public InvoiceDtos.InvoiceResponse create(InvoiceDtos.InvoiceRequest request) {
+        if (request.invoiceType() == InvoiceType.USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Use /api/usage-invoices to create usage invoices");
+        }
         SupplierInvoice invoice = new SupplierInvoice();
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
@@ -49,6 +89,9 @@ public class InvoiceService {
     @Transactional
     public InvoiceDtos.InvoiceResponse update(Long id, InvoiceDtos.InvoiceRequest request) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
+        if (invoice.getInvoiceType() == InvoiceType.USAGE || request.invoiceType() == InvoiceType.USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Use /api/usage-invoices to update usage invoices");
+        }
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
         invoiceItemRepository.findByInvoiceId(id).forEach(item -> {
@@ -59,6 +102,73 @@ public class InvoiceService {
         invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(id));
         replaceItems(invoice, request.items());
         return toResponse(invoice);
+    }
+
+    @Transactional
+    public InvoiceDtos.InvoiceResponse createUsage(InvoiceDtos.UsageInvoiceRequest request) {
+        SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
+        validateSupplySource(source);
+        ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId(), false);
+
+        SupplierInvoice invoice = new SupplierInvoice();
+        invoice.setInvoiceType(InvoiceType.USAGE);
+        invoice.setSupplier(source.getSupplier());
+        invoice.setProject(referenceDataService.getProject(request.projectId()));
+        invoice.setStage(stage);
+        invoice.setSourceSupplyInvoice(source);
+        invoice.setInvoiceDate(request.invoiceDate());
+        invoice.setCurrency(source.getCurrency());
+        invoice.setNotes(request.notes());
+        invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
+        invoice.setStatus(request.status());
+
+        List<SupplierInvoiceItem> usageItems = buildUsageItems(invoice, source, request.items(), null);
+        invoice.setTotalAmount(usageItems.stream().map(SupplierInvoiceItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+        SupplierInvoice saved = invoiceRepository.save(invoice);
+        usageItems.forEach(item -> {
+            item.setInvoice(saved);
+            invoiceItemRepository.save(item);
+        });
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public InvoiceDtos.InvoiceResponse updateUsage(Long id, InvoiceDtos.UsageInvoiceRequest request) {
+        SupplierInvoice invoice = referenceDataService.getInvoice(id);
+        if (invoice.getInvoiceType() != InvoiceType.USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only usage invoices can be updated here");
+        }
+        SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
+        validateSupplySource(source);
+        ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId(), true);
+
+        List<SupplierInvoiceItem> usageItems = buildUsageItems(invoice, source, request.items(), id);
+        invoice.setSupplier(source.getSupplier());
+        invoice.setProject(referenceDataService.getProject(request.projectId()));
+        invoice.setStage(stage);
+        invoice.setSourceSupplyInvoice(source);
+        invoice.setInvoiceDate(request.invoiceDate());
+        invoice.setCurrency(source.getCurrency());
+        invoice.setNotes(request.notes());
+        invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
+        invoice.setStatus(request.status());
+        invoice.setTotalAmount(usageItems.stream().map(SupplierInvoiceItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+        invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(id));
+        SupplierInvoice saved = invoiceRepository.save(invoice);
+        usageItems.forEach(item -> {
+            item.setInvoice(saved);
+            invoiceItemRepository.save(item);
+        });
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public void deleteUsage(Long id) {
+        SupplierInvoice invoice = referenceDataService.getInvoice(id);
+        if (invoice.getInvoiceType() != InvoiceType.USAGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only usage invoices can be deleted here");
+        }
+        invoiceRepository.delete(invoice);
     }
 
     @Transactional
@@ -86,6 +196,9 @@ public class InvoiceService {
     }
 
     private void apply(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request) {
+        invoice.setInvoiceType(InvoiceType.SUPPLY);
+        invoice.setSourceSupplyInvoice(null);
+        invoice.setStage(null);
         invoice.setSupplier(referenceDataService.getSupplier(request.supplierId()));
         invoice.setProject(request.projectId() == null ? null : referenceDataService.getProject(request.projectId()));
         invoice.setReference(request.reference());
@@ -115,6 +228,7 @@ public class InvoiceService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier advance items must use a material category");
         }
         item.setCategory(referenceDataService.getCategory(request.categoryId()));
+        item.setSourceSupplyItem(null);
         item.setDescription(request.description().trim());
         item.setQuantity(request.quantity());
         item.setUnit(request.unit());
@@ -132,14 +246,19 @@ public class InvoiceService {
     }
 
     private InvoiceDtos.InvoiceResponse toResponse(SupplierInvoice invoice) {
-        BigDecimal consumedAmount = referenceDataService.invoiceConsumedAmount(invoice.getId());
+        BigDecimal consumedAmount = invoice.getInvoiceType() == InvoiceType.SUPPLY ? referenceDataService.invoiceConsumedAmount(invoice.getId()) : invoice.getTotalAmount();
         List<InvoiceDtos.InvoiceItemResponse> items = invoiceItemRepository.findByInvoiceId(invoice.getId()).stream()
                 .map(this::toItemResponse)
                 .toList();
         return new InvoiceDtos.InvoiceResponse(
                 invoice.getId(),
+                invoice.getInvoiceType(),
                 invoice.getSupplier().getId(),
                 invoice.getProject() == null ? null : invoice.getProject().getId(),
+                invoice.getStage() == null ? null : invoice.getStage().getId(),
+                invoice.getStage() == null ? null : invoice.getStage().getName(),
+                invoice.getSourceSupplyInvoice() == null ? null : invoice.getSourceSupplyInvoice().getId(),
+                invoice.getSourceSupplyInvoice() == null ? null : invoice.getSourceSupplyInvoice().getReference(),
                 invoice.getSupplier().getName(),
                 invoice.getReference(),
                 invoice.getInvoiceDate(),
@@ -149,16 +268,22 @@ public class InvoiceService {
                 invoice.getDocumentRef(),
                 invoice.getStatus().name(),
                 consumedAmount,
-                invoice.getTotalAmount().subtract(consumedAmount),
+                invoice.getInvoiceType() == InvoiceType.SUPPLY ? invoice.getTotalAmount().subtract(consumedAmount) : BigDecimal.ZERO,
                 items
         );
     }
 
     private InvoiceDtos.InvoiceItemResponse toItemResponse(SupplierInvoiceItem item) {
-        BigDecimal consumedAmount = referenceDataService.invoiceItemConsumedAmount(item.getId(), null);
+        BigDecimal consumedAmount = item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY
+                ? referenceDataService.invoiceItemConsumedAmount(item.getId(), null)
+                : BigDecimal.ZERO;
+        BigDecimal remainingAmount = item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY
+                ? item.getTotalAmount().subtract(consumedAmount)
+                : BigDecimal.ZERO;
         return new InvoiceDtos.InvoiceItemResponse(
                 item.getId(),
                 item.getInvoice().getId(),
+                item.getSourceSupplyItem() == null ? null : item.getSourceSupplyItem().getId(),
                 item.getCategory().getId(),
                 item.getCategory().getName(),
                 item.getDescription(),
@@ -167,7 +292,73 @@ public class InvoiceService {
                 item.getUnitPrice(),
                 item.getTotalAmount(),
                 consumedAmount,
-                item.getTotalAmount().subtract(consumedAmount)
+                remainingAmount,
+                item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY ? availableQuantity(item, null) : null
         );
+    }
+
+    private void validateSupplySource(SupplierInvoice source) {
+        if (source.getInvoiceType() != InvoiceType.SUPPLY) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Source invoice must be a SUPPLY invoice");
+        }
+    }
+
+    private ConstructionStage validateUsageStage(Long projectId, Long stageId, boolean allowCompletedStage) {
+        ConstructionStage stage = referenceDataService.getStage(stageId);
+        if (!stage.getProject().getId().equals(projectId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
+        }
+        if (stage.getStatus() == StageStatus.COMPLETED && !allowCompletedStage) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record usage on a completed stage");
+        }
+        return stage;
+    }
+
+    private List<SupplierInvoiceItem> buildUsageItems(SupplierInvoice usageInvoice,
+                                                      SupplierInvoice source,
+                                                      List<InvoiceDtos.UsageInvoiceItemRequest> requests,
+                                                      Long excludingUsageInvoiceId) {
+        List<Long> sourceItemIds = requests.stream().map(InvoiceDtos.UsageInvoiceItemRequest::sourceSupplyItemId).distinct().toList();
+        Map<Long, SupplierInvoiceItem> sourceItems = invoiceItemRepository.findByIdIn(sourceItemIds).stream()
+                .collect(Collectors.toMap(SupplierInvoiceItem::getId, Function.identity()));
+        List<SupplierInvoiceItem> usageItems = requests.stream()
+                .filter(request -> request.quantityUsed().compareTo(BigDecimal.ZERO) > 0)
+                .map(request -> {
+                    SupplierInvoiceItem sourceItem = sourceItems.get(request.sourceSupplyItemId());
+                    if (sourceItem == null || !sourceItem.getInvoice().getId().equals(source.getId())) {
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "Usage line must reference an item from the source SUPPLY invoice");
+                    }
+                    if (sourceItem.getQuantity() == null || sourceItem.getUnitPrice() == null) {
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "Source SUPPLY item must have quantity and unit price");
+                    }
+                    BigDecimal available = availableQuantity(sourceItem, excludingUsageInvoiceId);
+                    if (request.quantityUsed().compareTo(available) > 0) {
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "Usage quantity exceeds available supply quantity");
+                    }
+                    SupplierInvoiceItem item = new SupplierInvoiceItem();
+                    item.setInvoice(usageInvoice);
+                    item.setSourceSupplyItem(sourceItem);
+                    item.setCategory(sourceItem.getCategory());
+                    item.setDescription(sourceItem.getDescription());
+                    item.setQuantity(request.quantityUsed());
+                    item.setUnit(sourceItem.getUnit());
+                    item.setUnitPrice(sourceItem.getUnitPrice());
+                    item.setTotalAmount(request.quantityUsed().multiply(sourceItem.getUnitPrice()));
+                    return item;
+                })
+                .toList();
+        if (usageItems.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Usage invoice must contain at least one positive line");
+        }
+        return usageItems;
+    }
+
+    private BigDecimal availableQuantity(SupplierInvoiceItem sourceItem, Long excludingUsageInvoiceId) {
+        BigDecimal initialQuantity = sourceItem.getQuantity() == null ? BigDecimal.ZERO : sourceItem.getQuantity();
+        BigDecimal usedQuantity = invoiceItemRepository.findBySourceSupplyItemId(sourceItem.getId()).stream()
+                .filter(item -> excludingUsageInvoiceId == null || !item.getInvoice().getId().equals(excludingUsageInvoiceId))
+                .map(SupplierInvoiceItem::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return initialQuantity.subtract(usedQuantity);
     }
 }

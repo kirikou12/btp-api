@@ -27,7 +27,20 @@ public class MaterialConsumptionService {
     @Transactional(readOnly = true)
     public List<ConsumptionDtos.ConsumptionResponse> byProject(Long projectId) {
         referenceDataService.getProject(projectId);
-        return referenceDataService.consumptionsByProject(projectId).stream().map(this::toResponse).toList();
+        return referenceDataService.usageItemsByProject(projectId).stream()
+                .map(item -> new ConsumptionDtos.ConsumptionResponse(
+                        item.getId(),
+                        item.getSourceSupplyItem() == null ? item.getId() : item.getSourceSupplyItem().getId(),
+                        item.getInvoice().getProject().getId(),
+                        item.getInvoice().getStage().getId(),
+                        item.getCategory().getId(),
+                        item.getCategory().getName(),
+                        item.getQuantity(),
+                        item.getTotalAmount(),
+                        item.getInvoice().getInvoiceDate(),
+                        item.getInvoice().getNotes()
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
