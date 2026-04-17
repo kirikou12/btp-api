@@ -62,18 +62,23 @@ class RimBtpApiApplicationTests {
                 .orElseThrow();
         ConstructionStage activeStage = activeStageForProject(supply.projectId());
 
-        InvoiceDtos.InvoiceResponse usage = invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
-                supply.id(),
+        InvoiceDtos.InvoiceResponse usage = invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY_USAGE,
+                null,
                 supply.projectId(),
                 activeStage.getId(),
+                supply.id(),
+                null,
                 LocalDate.now(),
+                null,
+                null,
                 "Two material usage",
                 null,
                 InvoiceStatus.CONFIRMED,
                 supply.items().stream()
                         .filter(item -> item.availableQuantity().compareTo(BigDecimal.ONE) >= 0)
                         .limit(2)
-                        .map(item -> new InvoiceDtos.UsageInvoiceItemRequest(item.id(), BigDecimal.ONE))
+                        .map(item -> new InvoiceDtos.InvoiceItemUpsertRequest(null, item.id(), null, null, BigDecimal.ONE, null, null, null))
                         .toList()
         ));
 
@@ -115,6 +120,7 @@ class RimBtpApiApplicationTests {
                 supply.supplierId(),
                 supply.projectId(),
                 activeStage.getId(),
+                null,
                 "DIRECT-TEST",
                 LocalDate.now(),
                 new BigDecimal("125.00"),

@@ -2,7 +2,6 @@ package mr.btp.api.invoice;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
@@ -17,13 +16,14 @@ public final class InvoiceDtos {
 
     public record InvoiceRequest(
             InvoiceType invoiceType,
-            @NotNull Long supplierId,
+            Long supplierId,
             Long projectId,
             Long stageId,
+            Long sourceSupplyInvoiceId,
             String reference,
             @NotNull LocalDate invoiceDate,
-            @NotNull @DecimalMin("0.00") BigDecimal totalAmount,
-            @NotBlank String currency,
+            BigDecimal totalAmount,
+            String currency,
             String notes,
             String documentRef,
             @NotNull InvoiceStatus status,
@@ -57,12 +57,12 @@ public final class InvoiceDtos {
     public record InvoiceItemUpsertRequest(
             Long invoiceId,
             Long sourceSupplyItemId,
-            @NotNull Long categoryId,
-            @NotBlank String description,
+            Long categoryId,
+            String description,
             BigDecimal quantity,
             String unit,
             BigDecimal unitPrice,
-            @NotNull @DecimalMin("0.00") BigDecimal totalAmount
+            BigDecimal totalAmount
     ) {
     }
 
