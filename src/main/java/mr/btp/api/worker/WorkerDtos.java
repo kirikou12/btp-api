@@ -17,6 +17,7 @@ public final class WorkerDtos {
             @NotBlank String name,
             @NotNull WorkerType type,
             Long projectId,
+            List<Long> projectIds,
             @NotNull @DecimalMin("0.00") BigDecimal plannedBudget,
             List<WorkerStageBudgetRequest> stageBudgets
     ) {
@@ -33,6 +34,8 @@ public final class WorkerDtos {
             String name,
             WorkerType type,
             Long projectId,
+            List<Long> projectIds,
+            List<String> projectNames,
             BigDecimal plannedBudget,
             List<WorkerStageBudgetResponse> stageBudgets,
             BigDecimal paidAmount,

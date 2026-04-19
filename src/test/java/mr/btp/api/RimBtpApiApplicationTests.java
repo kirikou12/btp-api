@@ -9,6 +9,9 @@ import mr.btp.api.invoice.InvoiceStatus;
 import mr.btp.api.invoice.InvoiceType;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.ConstructionStageRepository;
+import mr.btp.api.project.Project;
+import mr.btp.api.project.ProjectRepository;
+import mr.btp.api.project.ProjectStatus;
 import mr.btp.api.project.StageStatus;
 import mr.btp.api.worker.WorkerDtos;
 import mr.btp.api.worker.WorkerService;
@@ -46,6 +49,9 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private ConstructionStageRepository stageRepository;
+
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Autowired
     private DocumentStorageService documentStorageService;
@@ -335,22 +341,74 @@ class RimBtpApiApplicationTests {
                 "Project mason",
                 WorkerType.MASON,
                 projectId,
+                null,
                 new BigDecimal("1500.00"),
                 null
         ));
 
         assertThat(created.projectId()).isEqualTo(projectId);
+        assertThat(created.projectIds()).contains(projectId);
 
         WorkerDtos.WorkerResponse updated = workerService.updateWorker(created.id(), new WorkerDtos.WorkerRequest(
                 "Project mason",
                 WorkerType.MASON,
+                null,
                 null,
                 new BigDecimal("1750.00"),
                 null
         ));
 
         assertThat(updated.projectId()).isNull();
+        assertThat(updated.projectIds()).isEmpty();
         assertThat(updated.plannedBudget()).isEqualByComparingTo("1750.00");
+    }
+
+    @Test
+    @Transactional
+    void shouldAttachWorkerToMultipleProjects() {
+        ConstructionStage firstStage = stageRepository.findAll().stream().findFirst().orElseThrow();
+        Project secondProject = new Project();
+        secondProject.setName("Second worker project");
+        secondProject.setLocation("Nouakchott");
+        secondProject.setDescription("Project used for worker membership regression");
+        secondProject.setStartDate(LocalDate.now());
+        secondProject.setEstimatedSalePrice(new BigDecimal("10000.00"));
+        secondProject.setBudget(new BigDecimal("8000.00"));
+        secondProject.setStatus(ProjectStatus.PLANNING);
+        secondProject = projectRepository.save(secondProject);
+
+        ConstructionStage secondStage = new ConstructionStage();
+        secondStage.setProject(secondProject);
+        secondStage.setName("Second stage");
+        secondStage.setSortOrder(1);
+        secondStage.setStatus(StageStatus.NOT_STARTED);
+        secondStage.setPlannedBudget(new BigDecimal("1000.00"));
+        secondStage.setProgressPercent(0);
+        stageRepository.save(secondStage);
+
+        List<Long> projectIds = List.of(firstStage.getProject().getId(), secondProject.getId());
+
+        WorkerDtos.WorkerResponse created = workerService.createWorker(new WorkerDtos.WorkerRequest(
+                "Shared mason",
+                WorkerType.MASON,
+                projectIds.getFirst(),
+                null,
+                new BigDecimal("1500.00"),
+                null
+        ));
+
+        WorkerDtos.WorkerResponse updated = workerService.updateWorker(created.id(), new WorkerDtos.WorkerRequest(
+                "Shared mason",
+                WorkerType.MASON,
+                projectIds.getFirst(),
+                projectIds,
+                new BigDecimal("1500.00"),
+                null
+        ));
+
+        assertThat(updated.projectIds()).containsExactlyInAnyOrderElementsOf(projectIds);
+        assertThat(workerService.listWorkers(projectIds.getFirst())).extracting(WorkerDtos.WorkerResponse::id).contains(updated.id());
+        assertThat(workerService.listWorkers(projectIds.get(1))).extracting(WorkerDtos.WorkerResponse::id).contains(updated.id());
     }
 
     @Test
@@ -363,6 +421,7 @@ class RimBtpApiApplicationTests {
                 "Distributed mason",
                 WorkerType.MASON,
                 firstStage.getProject().getId(),
+                null,
                 new BigDecimal("0.00"),
                 projectStages.stream()
                         .limit(2)
@@ -379,6 +438,7 @@ class RimBtpApiApplicationTests {
                 "Distributed mason",
                 WorkerType.MASON,
                 firstStage.getProject().getId(),
+                null,
                 new BigDecimal("0.00"),
                 projectStages.stream()
                         .limit(2)

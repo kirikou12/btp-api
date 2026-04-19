@@ -1,12 +1,15 @@
 package mr.btp.api.worker;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
+import mr.btp.api.project.Project;
 import mr.btp.api.project.StageStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,7 +45,7 @@ public class WorkerService {
         }
 
         referenceDataService.getProject(projectId);
-        return workerRepository.findByProjectIdOrderByNameAsc(projectId).stream().map(this::toWorkerResponse).toList();
+        return workerRepository.findByProjectMembershipOrderByNameAsc(projectId).stream().map(this::toWorkerResponse).toList();
     }
 
     @Transactional(readOnly = true)
@@ -55,7 +58,9 @@ public class WorkerService {
         Worker worker = new Worker();
         apply(worker, request);
         Worker saved = workerRepository.save(worker);
-        applyStageBudgets(saved, request);
+        if (applyStageBudgets(saved, request)) {
+            recalculatePlannedBudget(saved);
+        }
         return toWorkerResponse(saved);
     }
 
@@ -64,7 +69,9 @@ public class WorkerService {
         Worker worker = referenceDataService.getWorker(id);
         apply(worker, request);
         Worker saved = workerRepository.save(worker);
-        applyStageBudgets(saved, request);
+        if (applyStageBudgets(saved, request)) {
+            recalculatePlannedBudget(saved);
+        }
         return toWorkerResponse(saved);
     }
 
@@ -115,8 +122,23 @@ public class WorkerService {
     private void apply(Worker worker, WorkerDtos.WorkerRequest request) {
         worker.setName(request.name().trim());
         worker.setType(request.type());
-        worker.setProject(request.projectId() == null ? null : referenceDataService.getProject(request.projectId()));
+        worker.setProjects(resolveProjects(request));
         worker.setPlannedBudget(resolvePlannedBudget(request));
+    }
+
+    private Set<Project> resolveProjects(WorkerDtos.WorkerRequest request) {
+        Set<Long> projectIds = new LinkedHashSet<>();
+        if (request.projectIds() != null) {
+            request.projectIds().stream()
+                    .filter(id -> id != null && id > 0)
+                    .forEach(projectIds::add);
+        } else if (request.projectId() != null) {
+            projectIds.add(request.projectId());
+        }
+
+        return projectIds.stream()
+                .map(referenceDataService::getProject)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     private BigDecimal resolvePlannedBudget(WorkerDtos.WorkerRequest request) {
@@ -129,14 +151,20 @@ public class WorkerService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private void applyStageBudgets(Worker worker, WorkerDtos.WorkerRequest request) {
-        workerStageBudgetRepository.deleteByWorker_Id(worker.getId());
-        workerStageBudgetRepository.flush();
-        if (request.stageBudgets() == null || request.stageBudgets().isEmpty()) {
-            return;
+    private boolean applyStageBudgets(Worker worker, WorkerDtos.WorkerRequest request) {
+        if (request.stageBudgets() == null) {
+            return false;
         }
-        if (worker.getProject() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage budgets require a project");
+
+        Long budgetProjectId = resolveBudgetProjectId(request);
+        if (budgetProjectId == null) {
+            workerStageBudgetRepository.deleteByWorker_Id(worker.getId());
+        } else {
+            workerStageBudgetRepository.deleteByWorker_IdAndStage_Project_Id(worker.getId(), budgetProjectId);
+        }
+        workerStageBudgetRepository.flush();
+        if (request.stageBudgets().isEmpty()) {
+            return true;
         }
 
         Set<Long> stageIds = new HashSet<>();
@@ -147,8 +175,12 @@ public class WorkerService {
                         throw new ApiException(HttpStatus.BAD_REQUEST, "Each stage can have only one worker budget");
                     }
                     ConstructionStage stage = referenceDataService.getStage(item.stageId());
-                    if (!stage.getProject().getId().equals(worker.getProject().getId())) {
+                    Long stageProjectId = stage.getProject().getId();
+                    if (!stageProjectId.equals(budgetProjectId)) {
                         throw new ApiException(HttpStatus.BAD_REQUEST, "Stage budget must belong to the selected project");
+                    }
+                    if (worker.getProjects().stream().noneMatch(project -> project.getId().equals(stageProjectId))) {
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "Stage budgets require the worker to be attached to the selected project");
                     }
 
                     WorkerStageBudget stageBudget = new WorkerStageBudget();
@@ -160,6 +192,30 @@ public class WorkerService {
                 .toList();
 
         workerStageBudgetRepository.saveAll(stageBudgets);
+        return true;
+    }
+
+    private Long resolveBudgetProjectId(WorkerDtos.WorkerRequest request) {
+        if (request.projectId() != null) {
+            return request.projectId();
+        }
+        if (request.stageBudgets() == null || request.stageBudgets().isEmpty()) {
+            return null;
+        }
+        ConstructionStage firstStage = referenceDataService.getStage(request.stageBudgets().getFirst().stageId());
+        return firstStage.getProject().getId();
+    }
+
+    private void recalculatePlannedBudget(Worker worker) {
+        List<WorkerStageBudget> stageBudgets = workerStageBudgetRepository.findByWorker_IdOrderByStage_SortOrderAsc(worker.getId());
+        if (stageBudgets.isEmpty()) {
+            return;
+        }
+
+        worker.setPlannedBudget(stageBudgets.stream()
+                .map(WorkerStageBudget::getPlannedBudget)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        workerRepository.save(worker);
     }
 
     private void apply(WorkerPayment payment, WorkerDtos.WorkerPaymentRequest request, boolean allowCompletedStage) {
@@ -171,7 +227,12 @@ public class WorkerService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record a worker payment on a completed stage");
         }
 
-        payment.setWorker(referenceDataService.getWorker(request.workerId()));
+        Worker worker = referenceDataService.getWorker(request.workerId());
+        if (worker.getProjects().stream().noneMatch(project -> project.getId().equals(request.projectId()))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Worker must be attached to the selected project");
+        }
+
+        payment.setWorker(worker);
         payment.setStage(stage);
         payment.setAmount(request.amount());
         payment.setPaymentDate(request.paymentDate());
@@ -189,11 +250,17 @@ public class WorkerService {
                         item.getPlannedBudget()
                 ))
                 .toList();
+        List<Project> projects = worker.getProjects().stream()
+                .sorted(Comparator.comparing(Project::getName))
+                .toList();
+        Long primaryProjectId = projects.stream().findFirst().map(Project::getId).orElse(null);
         return new WorkerDtos.WorkerResponse(
                 worker.getId(),
                 worker.getName(),
                 worker.getType(),
-                worker.getProject() == null ? null : worker.getProject().getId(),
+                primaryProjectId,
+                projects.stream().map(Project::getId).toList(),
+                projects.stream().map(Project::getName).toList(),
                 worker.getPlannedBudget(),
                 stageBudgets,
                 paid,

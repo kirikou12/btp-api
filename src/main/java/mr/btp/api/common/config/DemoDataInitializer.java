@@ -118,8 +118,8 @@ public class DemoDataInitializer {
             SupplierInvoiceItem villaSand = saveInvoiceItem(invoiceItemRepository, villaInvoice2, categories.get("Sand"),
                 "River sand", "20.00", "m3", "60.00", "1200.00");
 
-            Worker foundationMason = saveWorker(workerRepository, "Mohamed Diallo", WorkerType.MASON, "5000.00");
-            Worker electrician = saveWorker(workerRepository, "Sidi Ahmed", WorkerType.ELECTRICIAN, "3000.00");
+            Worker foundationMason = saveWorker(workerRepository, villaHorizon, "Mohamed Diallo", WorkerType.MASON, "5000.00");
+            Worker electrician = saveWorker(workerRepository, villaHorizon, "Sidi Ahmed", WorkerType.ELECTRICIAN, "3000.00");
             saveWorkerPayment(workerPaymentRepository, foundationMason, villaStages.get("Foundation"), "2200.00", today.minusDays(49));
             saveWorkerPayment(workerPaymentRepository, foundationMason, villaStages.get("Elevation"), "1800.00", today.minusDays(18));
             saveWorkerPayment(workerPaymentRepository, electrician, villaStages.get("Elevation"), "650.00", today.minusDays(11));
@@ -268,10 +268,11 @@ public class DemoDataInitializer {
         repository.save(expense);
     }
 
-    private Worker saveWorker(WorkerRepository repository, String name, WorkerType type, String plannedBudget) {
+    private Worker saveWorker(WorkerRepository repository, Project project, String name, WorkerType type, String plannedBudget) {
         Worker worker = new Worker();
         worker.setName(name);
         worker.setType(type);
+        worker.getProjects().add(project);
         worker.setPlannedBudget(amount(plannedBudget));
         return repository.save(worker);
     }

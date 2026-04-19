@@ -5,10 +5,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinTable;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import mr.btp.api.common.entity.BaseEntity;
 import mr.btp.api.project.Project;
 
@@ -19,9 +22,13 @@ public class Worker extends BaseEntity {
     @Column(nullable = false)
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id")
-    private Project project;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "worker_project_assignments",
+            joinColumns = @JoinColumn(name = "worker_id"),
+            inverseJoinColumns = @JoinColumn(name = "project_id")
+    )
+    private Set<Project> projects = new LinkedHashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -38,12 +45,12 @@ public class Worker extends BaseEntity {
         this.name = name;
     }
 
-    public Project getProject() {
-        return project;
+    public Set<Project> getProjects() {
+        return projects;
     }
 
-    public void setProject(Project project) {
-        this.project = project;
+    public void setProjects(Set<Project> projects) {
+        this.projects = projects;
     }
 
     public WorkerType getType() {
