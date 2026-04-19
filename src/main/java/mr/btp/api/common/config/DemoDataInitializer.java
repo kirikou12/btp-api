@@ -20,8 +20,6 @@ import mr.btp.api.project.Project;
 import mr.btp.api.project.ProjectRepository;
 import mr.btp.api.project.ProjectStatus;
 import mr.btp.api.project.StageStatus;
-import mr.btp.api.project.StageTemplate;
-import mr.btp.api.project.StageTemplateRepository;
 import mr.btp.api.supplier.Supplier;
 import mr.btp.api.supplier.SupplierRepository;
 import mr.btp.api.user.User;
@@ -48,7 +46,6 @@ public class DemoDataInitializer {
                                    ExpenseCategoryRepository categoryRepository,
                                    ProjectRepository projectRepository,
                                    ConstructionStageRepository stageRepository,
-                                   StageTemplateRepository stageTemplateRepository,
                                    SupplierRepository supplierRepository,
                                    SupplierInvoiceRepository invoiceRepository,
                                    SupplierInvoiceItemRepository invoiceItemRepository,
@@ -89,10 +86,6 @@ public class DemoDataInitializer {
                 "Transport, crane moves, and site deliveries");
 
             LocalDate today = LocalDate.now();
-            Map<String, StageTemplate> stageTemplates = new LinkedHashMap<>();
-            stageTemplateRepository.findAllByOrderBySortOrderAsc()
-                    .forEach(template -> stageTemplates.put(template.getName().toLowerCase(), template));
-
             Project villaHorizon = saveProject(projectRepository,
                 "Villa Horizon",
                 "Nouakchott",
@@ -102,7 +95,7 @@ public class DemoDataInitializer {
                 "130000.00",
                 ProjectStatus.IN_PROGRESS);
 
-            Map<String, ConstructionStage> villaStages = seedStages(stageRepository, stageTemplates, villaHorizon,
+            Map<String, ConstructionStage> villaStages = seedStages(stageRepository, villaHorizon,
                 stageSpec("Foundation", 1, StageStatus.COMPLETED, "25000.00", 100),
                 stageSpec("Elevation", 2, StageStatus.IN_PROGRESS, "30000.00", 48),
                 stageSpec("Roofing", 3, StageStatus.NOT_STARTED, "18000.00", 0),
@@ -173,18 +166,16 @@ public class DemoDataInitializer {
     }
 
     private Map<String, ConstructionStage> seedStages(ConstructionStageRepository repository,
-                                                      Map<String, StageTemplate> stageTemplates,
                                                       Project project,
                                                       StageSeed... specs) {
         Map<String, ConstructionStage> stages = new LinkedHashMap<>();
         for (StageSeed spec : specs) {
-            stages.put(spec.name(), saveStage(repository, stageTemplates, project, spec.name(), spec.order(), spec.status(), amount(spec.plannedBudget()), spec.progressPercent()));
+            stages.put(spec.name(), saveStage(repository, project, spec.name(), spec.order(), spec.status(), amount(spec.plannedBudget()), spec.progressPercent()));
         }
         return stages;
     }
 
     private ConstructionStage saveStage(ConstructionStageRepository repository,
-                                        Map<String, StageTemplate> stageTemplates,
                                         Project project,
                                         String name,
                                         int order,
@@ -193,7 +184,6 @@ public class DemoDataInitializer {
                                         int progressPercent) {
         ConstructionStage stage = new ConstructionStage();
         stage.setProject(project);
-        stage.setStageTemplate(stageTemplates.get(name.toLowerCase()));
         stage.setName(name);
         stage.setSortOrder(order);
         stage.setStatus(status);

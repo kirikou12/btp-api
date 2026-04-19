@@ -2,7 +2,6 @@ package mr.btp.api.project;
 
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
-import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,16 +14,13 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ConstructionStageRepository stageRepository;
-    private final StageTemplateRepository stageTemplateRepository;
     private final ReferenceDataService referenceDataService;
 
     public ProjectService(ProjectRepository projectRepository,
                           ConstructionStageRepository stageRepository,
-                          StageTemplateRepository stageTemplateRepository,
                           ReferenceDataService referenceDataService) {
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
-        this.stageTemplateRepository = stageTemplateRepository;
         this.referenceDataService = referenceDataService;
     }
 
@@ -43,7 +39,6 @@ public class ProjectService {
         Project project = new Project();
         apply(project, request);
         Project saved = projectRepository.save(project);
-        createStagesFromActiveTemplates(saved);
         return toResponse(saved);
     }
 
@@ -67,6 +62,19 @@ public class ProjectService {
     }
 
     @Transactional
+    public ProjectDtos.StageResponse createStage(Long projectId, ProjectDtos.StageCreateRequest request) {
+        Project project = referenceDataService.getProject(projectId);
+        ConstructionStage stage = new ConstructionStage();
+        stage.setProject(project);
+        stage.setName(request.name().trim());
+        stage.setSortOrder(nextSortOrder(projectId));
+        stage.setStatus(StageStatus.NOT_STARTED);
+        stage.setPlannedBudget(request.plannedBudget());
+        stage.setProgressPercent(0);
+        return toStageResponse(stageRepository.save(stage));
+    }
+
+    @Transactional
     public ProjectDtos.StageResponse updateStage(Long stageId, ProjectDtos.StageRequest request) {
         ConstructionStage stage = referenceDataService.getStage(stageId);
         apply(stage, request);
@@ -84,6 +92,12 @@ public class ProjectService {
     }
 
     private void apply(ConstructionStage stage, ProjectDtos.StageRequest request) {
+        if (request.name() != null && !request.name().isBlank()) {
+            stage.setName(request.name().trim());
+        }
+        if (request.sortOrder() != null) {
+            stage.setSortOrder(request.sortOrder());
+        }
         if (request.startDate() != null && request.endDate() != null && request.endDate().isBefore(request.startDate())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage end date cannot be before start date");
         }
@@ -105,18 +119,11 @@ public class ProjectService {
         stage.setProgressPercent(request.progressPercent() == null ? stage.getProgressPercent() : request.progressPercent());
     }
 
-    private void createStagesFromActiveTemplates(Project project) {
-        List<StageTemplate> templates = stageTemplateRepository.findByActiveTrueOrderBySortOrderAsc();
-        for (StageTemplate template : templates) {
-            ConstructionStage stage = new ConstructionStage();
-            stage.setProject(project);
-            stage.setStageTemplate(template);
-            stage.setName(template.getName());
-            stage.setSortOrder(template.getSortOrder());
-            stage.setStatus(StageStatus.NOT_STARTED);
-            stage.setProgressPercent(0);
-            stageRepository.save(stage);
-        }
+    private int nextSortOrder(Long projectId) {
+        return referenceDataService.stagesByProject(projectId).stream()
+                .map(ConstructionStage::getSortOrder)
+                .max(Integer::compareTo)
+                .orElse(0) + 1;
     }
 
     private ProjectDtos.ProjectResponse toResponse(Project project) {
@@ -138,7 +145,6 @@ public class ProjectService {
         return new ProjectDtos.StageResponse(
                 stage.getId(),
                 stage.getProject().getId(),
-                stage.getStageTemplate() == null ? null : stage.getStageTemplate().getId(),
                 stage.getName(),
                 stage.getSortOrder(),
                 stage.getStatus().name(),

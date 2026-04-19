@@ -107,4 +107,4 @@ Actuator is enabled with a minimal public surface:
 
 - Supplier advances are stored as `SupplierInvoice` and `SupplierInvoiceItem`, but they do not count as chantier cost.
 - Real cost is recognized through `DirectExpense`, usage invoices, and worker payments.
-- New projects initialize their stages from the active global `StageTemplate` list.
+- Project stages are created and updated directly on each project.

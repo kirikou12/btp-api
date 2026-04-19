@@ -51,6 +51,11 @@ public class ProjectController {
         return projectService.listStages(id);
     }
 
+    @PostMapping("/api/projects/{id}/stages")
+    public ProjectDtos.StageResponse createStage(@PathVariable Long id, @Valid @RequestBody ProjectDtos.StageCreateRequest request) {
+        return projectService.createStage(id, request);
+    }
+
     @GetMapping("/api/projects/{id}/usage-invoices")
     public List<InvoiceDtos.InvoiceResponse> listUsageInvoices(@PathVariable Long id,
                                                                @RequestParam(required = false) Long stageId) {

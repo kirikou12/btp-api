@@ -20,10 +20,6 @@ public class ConstructionStage extends BaseEntity {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "stage_template_id")
-    private StageTemplate stageTemplate;
-
     @Column(nullable = false)
     private String name;
 
@@ -52,14 +48,6 @@ public class ConstructionStage extends BaseEntity {
 
     public void setProject(Project project) {
         this.project = project;
-    }
-
-    public StageTemplate getStageTemplate() {
-        return stageTemplate;
-    }
-
-    public void setStageTemplate(StageTemplate stageTemplate) {
-        this.stageTemplate = stageTemplate;
     }
 
     public String getName() {

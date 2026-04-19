@@ -14,8 +14,6 @@ import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.ConstructionStageRepository;
 import mr.btp.api.project.Project;
 import mr.btp.api.project.ProjectRepository;
-import mr.btp.api.project.StageTemplate;
-import mr.btp.api.project.StageTemplateRepository;
 import mr.btp.api.supplier.Supplier;
 import mr.btp.api.supplier.SupplierRepository;
 import mr.btp.api.user.User;
@@ -38,7 +36,6 @@ public class ReferenceDataService {
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final ConstructionStageRepository stageRepository;
-    private final StageTemplateRepository stageTemplateRepository;
     private final ExpenseCategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
     private final DirectExpenseRepository expenseRepository;
@@ -50,7 +47,6 @@ public class ReferenceDataService {
     public ReferenceDataService(UserRepository userRepository,
                                 ProjectRepository projectRepository,
                                 ConstructionStageRepository stageRepository,
-                                StageTemplateRepository stageTemplateRepository,
                                 ExpenseCategoryRepository categoryRepository,
                                 SupplierRepository supplierRepository,
                                 DirectExpenseRepository expenseRepository,
@@ -61,7 +57,6 @@ public class ReferenceDataService {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
-        this.stageTemplateRepository = stageTemplateRepository;
         this.categoryRepository = categoryRepository;
         this.supplierRepository = supplierRepository;
         this.expenseRepository = expenseRepository;
@@ -81,10 +76,6 @@ public class ReferenceDataService {
 
     public ConstructionStage getStage(Long id) {
         return stageRepository.findById(id).orElseThrow(() -> notFound("Stage"));
-    }
-
-    public StageTemplate getStageTemplate(Long id) {
-        return stageTemplateRepository.findById(id).orElseThrow(() -> notFound("Stage template"));
     }
 
     public ExpenseCategory getCategory(Long id) {
@@ -151,10 +142,6 @@ public class ReferenceDataService {
 
     public List<ConstructionStage> stagesByProject(Long projectId) {
         return stageRepository.findByProjectIdOrderBySortOrderAsc(projectId);
-    }
-
-    public List<StageTemplate> activeStageTemplates() {
-        return stageTemplateRepository.findByActiveTrueOrderBySortOrderAsc();
     }
 
     public List<DirectExpense> expensesByProject(Long projectId) {

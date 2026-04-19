@@ -41,18 +41,25 @@ public final class ProjectDtos {
     }
 
     public record StageRequest(
+            String name,
             @NotNull StageStatus status,
             LocalDate startDate,
             LocalDate endDate,
             @DecimalMin("0.00") BigDecimal plannedBudget,
-            @Min(0) @Max(100) Integer progressPercent
+            @Min(0) @Max(100) Integer progressPercent,
+            @Min(1) Integer sortOrder
+    ) {
+    }
+
+    public record StageCreateRequest(
+            @NotBlank String name,
+            @DecimalMin("0.00") BigDecimal plannedBudget
     ) {
     }
 
     public record StageResponse(
             Long id,
             Long projectId,
-            Long stageTemplateId,
             String name,
             Integer sortOrder,
             String status,
@@ -64,20 +71,4 @@ public final class ProjectDtos {
     ) {
     }
 
-    public record StageTemplateRequest(
-            @NotBlank String name,
-            @NotNull Integer sortOrder,
-            boolean active
-    ) {
-    }
-
-    public record StageTemplateResponse(
-            Long id,
-            String name,
-            Integer sortOrder,
-            boolean active,
-            Instant createdAt,
-            Instant updatedAt
-    ) {
-    }
 }
