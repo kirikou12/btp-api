@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -20,8 +21,8 @@ public class WorkerController {
     }
 
     @GetMapping("/api/workers")
-    public List<WorkerDtos.WorkerResponse> listWorkers() {
-        return workerService.listWorkers();
+    public List<WorkerDtos.WorkerResponse> listWorkers(@RequestParam(required = false) Long projectId) {
+        return workerService.listWorkers(projectId);
     }
 
     @PostMapping("/api/workers")

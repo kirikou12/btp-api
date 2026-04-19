@@ -161,7 +161,7 @@ class RimBtpApiApplicationTests {
 
         assertThat(supplyReturn.invoiceType()).isEqualTo(InvoiceType.SUPPLY_RETURN);
         assertThat(supplyReturn.sourceSupplyInvoiceId()).isEqualTo(supply.id());
-        assertThat(supplyReturn.projectId()).isNull();
+        assertThat(supplyReturn.projectId()).isEqualTo(supply.projectId());
         assertThat(supplyReturn.stageId()).isNull();
 
         InvoiceDtos.InvoiceResponse refreshedSupply = invoiceService.get(supply.id());

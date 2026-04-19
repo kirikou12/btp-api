@@ -36,22 +36,22 @@ public class InvoiceService {
 
     @Transactional(readOnly = true)
     public PageResponse<InvoiceDtos.InvoiceResponse> list(int page, int size) {
-        return list(page, size, null);
+        return list(page, size, null, null);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<InvoiceDtos.InvoiceResponse> list(int page, int size, String type) {
-        if (type == null || type.isBlank() || "ALL".equalsIgnoreCase(type)) {
-            return PageResponse.from(invoiceRepository.findAll(PageRequest.of(page, size)).map(this::toResponse));
+        return list(page, size, type, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InvoiceDtos.InvoiceResponse> list(int page, int size, String type, Long projectId) {
+        if (projectId != null) {
+            referenceDataService.getProject(projectId);
         }
-        InvoiceType invoiceType = InvoiceType.valueOf(type.trim().toUpperCase());
-        List<InvoiceDtos.InvoiceResponse> rows = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream()
-                .skip((long) page * size)
-                .limit(size)
-                .map(this::toResponse)
-                .toList();
-        long total = invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).size();
-        return new PageResponse<>(rows, page, size, total, (int) Math.ceil((double) total / size));
+
+        InvoiceType invoiceType = parseInvoiceTypeFilter(type);
+        return PageResponse.from(invoiceRepository.findForProjectAndType(projectId, invoiceType, PageRequest.of(page, size)).map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
@@ -269,7 +269,7 @@ public class InvoiceService {
     private void applyReturnInvoice(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, SupplierInvoice source) {
         invoice.setInvoiceType(InvoiceType.SUPPLY_RETURN);
         invoice.setSupplier(source.getSupplier());
-        invoice.setProject(null);
+        invoice.setProject(source.getProject());
         invoice.setStage(null);
         invoice.setSourceSupplyInvoice(source);
         invoice.setReference(request.reference());
@@ -278,6 +278,18 @@ public class InvoiceService {
         invoice.setNotes(request.notes());
         invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
         invoice.setStatus(request.status());
+    }
+
+    private InvoiceType parseInvoiceTypeFilter(String type) {
+        if (type == null || type.isBlank() || "ALL".equalsIgnoreCase(type)) {
+            return null;
+        }
+
+        try {
+            return InvoiceType.valueOf(type.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported invoice type");
+        }
     }
 
     @Transactional

@@ -24,8 +24,9 @@ public class InvoiceController {
     @GetMapping("/api/supplier-invoices")
     public PageResponse<InvoiceDtos.InvoiceResponse> list(@RequestParam(defaultValue = "0") int page,
                                                           @RequestParam(defaultValue = "20") int size,
-                                                          @RequestParam(required = false) String type) {
-        return invoiceService.list(page, size, type);
+                                                          @RequestParam(required = false) String type,
+                                                          @RequestParam(required = false) Long projectId) {
+        return invoiceService.list(page, size, type, projectId);
     }
 
     @PostMapping("/api/supplier-invoices")

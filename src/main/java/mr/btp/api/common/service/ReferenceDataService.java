@@ -153,9 +153,7 @@ public class ReferenceDataService {
     }
 
     public List<SupplierInvoice> invoicesByProject(Long projectId) {
-        return invoiceRepository.findByProjectIdOrProjectIdIsNullOrderByInvoiceDateDesc(projectId).stream()
-                .filter(invoice -> invoice.getInvoiceType() == InvoiceType.SUPPLY)
-                .toList();
+        return invoiceRepository.findSupplyInvoicesForProject(projectId);
     }
 
     public List<SupplierInvoiceItem> usageItemsByProject(Long projectId) {

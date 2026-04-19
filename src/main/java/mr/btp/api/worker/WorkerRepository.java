@@ -5,4 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface WorkerRepository extends JpaRepository<Worker, Long> {
     List<Worker> findAllByOrderByNameAsc();
+    List<Worker> findByProjectIdOrderByNameAsc(Long projectId);
 }

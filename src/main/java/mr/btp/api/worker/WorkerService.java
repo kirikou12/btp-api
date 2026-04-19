@@ -32,7 +32,17 @@ public class WorkerService {
 
     @Transactional(readOnly = true)
     public List<WorkerDtos.WorkerResponse> listWorkers() {
-        return workerRepository.findAllByOrderByNameAsc().stream().map(this::toWorkerResponse).toList();
+        return listWorkers(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WorkerDtos.WorkerResponse> listWorkers(Long projectId) {
+        if (projectId == null) {
+            return workerRepository.findAllByOrderByNameAsc().stream().map(this::toWorkerResponse).toList();
+        }
+
+        referenceDataService.getProject(projectId);
+        return workerRepository.findByProjectIdOrderByNameAsc(projectId).stream().map(this::toWorkerResponse).toList();
     }
 
     @Transactional(readOnly = true)
