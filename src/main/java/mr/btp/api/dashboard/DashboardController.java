@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api")
 public class DashboardController {
@@ -23,5 +25,10 @@ public class DashboardController {
     @GetMapping("/projects/{id}/dashboard")
     public DashboardDtos.DashboardResponse byProject(@PathVariable Long id) {
         return dashboardService.byProject(id);
+    }
+
+    @GetMapping("/projects/expense-summaries")
+    public List<DashboardDtos.ProjectExpenseSummaryResponse> projectExpenseSummaries() {
+        return dashboardService.projectExpenseSummaries();
     }
 }

@@ -227,7 +227,7 @@ class RimBtpApiApplicationTests {
         DashboardDtos.DashboardResponse afterProject = dashboardService.byProject(supply.projectId());
         DashboardDtos.DashboardResponse afterGlobal = dashboardService.global();
         assertThat(afterProject.totalActualCost()).isEqualByComparingTo(beforeProject.totalActualCost());
-        assertThat(afterProject.totalUsageCost()).isEqualByComparingTo(beforeProject.totalUsageCost());
+        assertThat(afterProject.totalMaterialConsumed()).isEqualByComparingTo(beforeProject.totalMaterialConsumed());
         assertThat(afterGlobal.materialsRemainingWithSuppliers())
                 .isEqualByComparingTo(beforeGlobal.materialsRemainingWithSuppliers().subtract(supplyReturn.totalAmount()));
     }

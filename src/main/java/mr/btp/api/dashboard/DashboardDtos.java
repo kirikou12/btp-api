@@ -9,7 +9,7 @@ public final class DashboardDtos {
 
     public record DashboardResponse(
             BigDecimal totalDirectExpenses,
-            BigDecimal totalUsageCost,
+            BigDecimal totalMaterialConsumed,
             BigDecimal totalWorkerPayments,
             BigDecimal totalActualCost,
             BigDecimal totalBudget,
@@ -18,6 +18,15 @@ public final class DashboardDtos {
             BigDecimal estimatedProfit,
             long activeProjects,
             BigDecimal materialsRemainingWithSuppliers
+    ) {
+    }
+
+    public record ProjectExpenseSummaryResponse(
+            Long projectId,
+            BigDecimal totalDirectExpenses,
+            BigDecimal totalMaterialConsumed,
+            BigDecimal totalWorkerPayments,
+            BigDecimal totalActualCost
     ) {
     }
 }
