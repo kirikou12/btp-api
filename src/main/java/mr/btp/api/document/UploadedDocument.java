@@ -24,9 +24,7 @@ public class UploadedDocument extends BaseEntity {
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
 
-    @Lob
-    @Basic(fetch = FetchType.LAZY)
-    @Column(nullable = false, columnDefinition = "bytea")
+    @Column(nullable = false)
     private byte[] content;
 
     public String getFileName() {
