@@ -498,6 +498,55 @@ class RimBtpApiApplicationTests {
     }
 
     @Test
+    @Transactional
+    void shouldHandleVariousImageContentTypes() {
+        String[] types = {"image/jpg", "image/pjpeg", "image/heic-sequence", "image/heif-sequence"};
+        for (String type : types) {
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "photo",
+                    type,
+                    new byte[]{1, 2, 3, 4}
+            );
+            DocumentStorageService.DocumentUploadResponse uploaded = documentStorageService.storeImage(file);
+            assertThat(uploaded.contentType()).isIn("image/jpeg", "image/heic");
+        }
+    }
+
+    @Autowired
+    private mr.btp.api.category.ExpenseCategoryRepository categoryRepository;
+
+    @Test
+    @Transactional
+    void shouldCreateExpenseEvenWithSubCategory() {
+        Project project = projectRepository.findAll().getFirst();
+        ConstructionStage stage = activeStageForProject(project.getId());
+        mr.btp.api.category.ExpenseCategory category = categoryRepository.findAll().stream()
+                .filter(c -> c.getType() != mr.btp.api.category.CategoryType.LABOR)
+                .findFirst().orElseThrow();
+
+        mr.btp.api.expense.ExpenseDtos.ExpenseResponse response = ((mr.btp.api.expense.DirectExpenseController) applicationContext.getBean("directExpenseController")).create(
+                new mr.btp.api.expense.ExpenseDtos.ExpenseRequest(
+                        project.getId(),
+                        stage.getId(),
+                        category.getId(),
+                        null,
+                        new BigDecimal("100.00"),
+                        "Test with subcategory",
+                        "Deprecated SubCategory",
+                        "proof.jpg",
+                        LocalDate.now()
+                )
+        );
+
+        assertThat(response.amount()).isEqualByComparingTo("100.00");
+        assertThat(response.subCategory()).isNull();
+    }
+
+    @Autowired
+    private org.springframework.context.ApplicationContext applicationContext;
+
+    @Test
     void shouldExposeActuatorLivenessWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/actuator/health/liveness"))
                 .andExpect(status().isOk())

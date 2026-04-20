@@ -65,20 +65,20 @@ public class DocumentStorageService {
         }
 
         return switch (contentType.toLowerCase(Locale.ROOT)) {
-            case "image/jpeg" -> ".jpg";
+            case "image/jpeg", "image/jpg", "image/pjpeg" -> ".jpg";
             case "image/png" -> ".png";
             case "image/webp" -> ".webp";
-            case "image/heic", "image/heif" -> ".heic";
-            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported image type");
+            case "image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence" -> ".heic";
+            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported image type: " + contentType);
         };
     }
 
     private String getStoredContentType(String contentType, String extension) {
         return switch (contentType.toLowerCase(Locale.ROOT)) {
-            case "image/jpeg" -> "image/jpeg";
+            case "image/jpeg", "image/jpg", "image/pjpeg" -> "image/jpeg";
             case "image/png" -> "image/png";
             case "image/webp" -> "image/webp";
-            case "image/heic", "image/heif" -> "image/heic";
+            case "image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence" -> "image/heic";
             default -> switch (extension) {
                 case ".jpg", ".jpeg" -> "image/jpeg";
                 case ".png" -> "image/png";

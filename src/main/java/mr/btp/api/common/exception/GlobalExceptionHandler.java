@@ -37,6 +37,11 @@ public class GlobalExceptionHandler {
         return build(status, exception.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSize(org.springframework.web.multipart.MaxUploadSizeExceededException exception, HttpServletRequest request) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large. Max size allowed is 20MB.", request, Map.of());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception exception, HttpServletRequest request) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage(), request, Map.of());

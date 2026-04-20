@@ -69,9 +69,6 @@ public class DirectExpenseService {
         if (category.getType() == CategoryType.LABOR) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Labor must be recorded as worker payments");
         }
-        if (request.subCategory() != null && !request.subCategory().isBlank()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Sub-category is no longer allowed for direct expenses");
-        }
         expense.setStage(stage);
         expense.setCategory(category);
         expense.setSupplier(request.supplierId() == null ? null : referenceDataService.getSupplier(request.supplierId()));
