@@ -169,6 +169,9 @@ public class InvoiceService {
 
         List<SupplierInvoiceItem> usageItems = buildUsageItems(invoice, source, request.items(), null);
         invoice.setTotalAmount(sumItemTotals(usageItems));
+        if (invoice.getNotes() == null || invoice.getNotes().isBlank()) {
+            invoice.setNotes(generateNotesFromItems(usageItems));
+        }
         SupplierInvoice saved = invoiceRepository.save(invoice);
         usageItems.forEach(item -> {
             item.setInvoice(saved);
@@ -184,6 +187,9 @@ public class InvoiceService {
         List<SupplierInvoiceItem> usageItems = buildUsageItems(invoice, source, request.items(), invoice.getId());
         applyUsageInvoice(invoice, request, source, stage);
         invoice.setTotalAmount(sumItemTotals(usageItems));
+        if (invoice.getNotes() == null || invoice.getNotes().isBlank()) {
+            invoice.setNotes(generateNotesFromItems(usageItems));
+        }
         invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(invoice.getId()));
         SupplierInvoice saved = invoiceRepository.save(invoice);
         usageItems.forEach(item -> {
@@ -201,6 +207,9 @@ public class InvoiceService {
 
         List<SupplierInvoiceItem> returnItems = buildReturnItems(invoice, source, request.items(), null);
         invoice.setTotalAmount(sumItemTotals(returnItems));
+        if (invoice.getNotes() == null || invoice.getNotes().isBlank()) {
+            invoice.setNotes(generateNotesFromItems(returnItems));
+        }
         SupplierInvoice saved = invoiceRepository.save(invoice);
         returnItems.forEach(item -> {
             item.setInvoice(saved);
@@ -215,6 +224,9 @@ public class InvoiceService {
         List<SupplierInvoiceItem> returnItems = buildReturnItems(invoice, source, request.items(), invoice.getId());
         applyReturnInvoice(invoice, request, source);
         invoice.setTotalAmount(sumItemTotals(returnItems));
+        if (invoice.getNotes() == null || invoice.getNotes().isBlank()) {
+            invoice.setNotes(generateNotesFromItems(returnItems));
+        }
         invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(invoice.getId()));
         SupplierInvoice saved = invoiceRepository.save(invoice);
         returnItems.forEach(item -> {
@@ -372,7 +384,7 @@ public class InvoiceService {
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setTotalAmount(request.totalAmount());
         invoice.setCurrency(request.currency().trim().toUpperCase());
-        invoice.setNotes(request.notes());
+        invoice.setNotes(request.notes() == null || request.notes().isBlank() ? generateNotesFromRequests(request.items()) : request.notes().trim());
         invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
         invoice.setStatus(request.status());
     }
@@ -624,5 +636,33 @@ public class InvoiceService {
                 .map(SupplierInvoiceItem::getQuantity)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return initialQuantity.subtract(outgoingQuantity);
+    }
+
+    private String generateNotesFromRequests(List<InvoiceDtos.InvoiceItemUpsertRequest> items) {
+        if (items == null) return null;
+        String notes = items.stream()
+                .map(item -> {
+                    if (item.description() != null && !item.description().isBlank()) {
+                        return item.description().trim();
+                    }
+                    if (item.categoryId() != null) {
+                        return referenceDataService.getCategory(item.categoryId()).getName();
+                    }
+                    return null;
+                })
+                .filter(desc -> desc != null && !desc.isBlank())
+                .distinct()
+                .collect(Collectors.joining(" | "));
+        return notes.isBlank() ? null : notes;
+    }
+
+    private String generateNotesFromItems(List<SupplierInvoiceItem> items) {
+        if (items == null) return null;
+        String notes = items.stream()
+                .map(SupplierInvoiceItem::getDescription)
+                .filter(desc -> desc != null && !desc.isBlank())
+                .distinct()
+                .collect(Collectors.joining(" | "));
+        return notes.isBlank() ? null : notes;
     }
 }

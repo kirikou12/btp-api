@@ -18,7 +18,7 @@ public final class ExpenseDtos {
             @NotNull Long categoryId,
             Long supplierId,
             @NotNull @DecimalMin("0.00") BigDecimal amount,
-            @NotBlank String description,
+            String description,
             String subCategory,
             String documentRef,
             @NotNull LocalDate expenseDate

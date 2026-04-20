@@ -73,7 +73,7 @@ public class DirectExpenseService {
         expense.setCategory(category);
         expense.setSupplier(request.supplierId() == null ? null : referenceDataService.getSupplier(request.supplierId()));
         expense.setAmount(request.amount());
-        expense.setDescription(request.description().trim());
+        expense.setDescription(request.description() == null || request.description().isBlank() ? category.getName() : request.description().trim());
         expense.setSubCategory(null);
         expense.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
         expense.setExpenseDate(request.expenseDate());
