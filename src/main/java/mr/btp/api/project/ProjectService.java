@@ -64,9 +64,15 @@ public class ProjectService {
     @Transactional
     public ProjectDtos.StageResponse createStage(Long projectId, ProjectDtos.StageCreateRequest request) {
         Project project = referenceDataService.getProject(projectId);
+
+        String stageName = request.name().trim();
+        stageRepository.findByProjectIdAndNameIgnoreCase(projectId, stageName).ifPresent(s -> {
+            throw new ApiException(HttpStatus.CONFLICT, "Stage with name '" + stageName + "' already exists for this project");
+        });
+
         ConstructionStage stage = new ConstructionStage();
         stage.setProject(project);
-        stage.setName(request.name().trim());
+        stage.setName(stageName);
         stage.setSortOrder(nextSortOrder(projectId));
         stage.setStatus(StageStatus.NOT_STARTED);
         stage.setPlannedBudget(request.plannedBudget());
@@ -77,8 +83,25 @@ public class ProjectService {
     @Transactional
     public ProjectDtos.StageResponse updateStage(Long stageId, ProjectDtos.StageRequest request) {
         ConstructionStage stage = referenceDataService.getStage(stageId);
+
+        if (request.name() != null && !request.name().isBlank()) {
+            String newName = request.name().trim();
+            if (!stage.getName().equalsIgnoreCase(newName)) {
+                stageRepository.findByProjectIdAndNameIgnoreCase(stage.getProject().getId(), newName).ifPresent(s -> {
+                    throw new ApiException(HttpStatus.CONFLICT, "Stage with name '" + newName + "' already exists for this project");
+                });
+            }
+        }
+
         apply(stage, request);
         return toStageResponse(stageRepository.save(stage));
+    }
+
+    @Transactional
+    public void deleteStage(Long stageId) {
+        referenceDataService.getStage(stageId);
+        referenceDataService.validateStageDeletion(stageId);
+        stageRepository.deleteById(stageId);
     }
 
     private void apply(Project project, ProjectDtos.ProjectRequest request) {
@@ -152,7 +175,8 @@ public class ProjectService {
                 stage.getEndDate(),
                 stage.getPlannedBudget(),
                 referenceDataService.stageActualCost(stage.getId()),
-                stage.getProgressPercent()
+                stage.getProgressPercent(),
+                referenceDataService.isStageDeletable(stage.getId())
         );
     }
 }
