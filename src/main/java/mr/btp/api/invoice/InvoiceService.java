@@ -7,11 +7,14 @@ import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.StageStatus;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -51,7 +54,14 @@ public class InvoiceService {
         }
 
         InvoiceType invoiceType = parseInvoiceTypeFilter(type);
-        return PageResponse.from(invoiceRepository.findForProjectAndType(projectId, invoiceType, PageRequest.of(page, size)).map(this::toResponse));
+        Page<SupplierInvoice> invoices = invoiceRepository.findForProjectAndType(projectId, invoiceType, PageRequest.of(page, size));
+        return new PageResponse<>(
+                toResponses(invoices.getContent()),
+                invoices.getNumber(),
+                invoices.getSize(),
+                invoices.getTotalElements(),
+                invoices.getTotalPages()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -67,13 +77,9 @@ public class InvoiceService {
             if (!stage.getProject().getId().equals(projectId)) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
             }
-            return invoiceRepository.findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, stageId, USAGE_INVOICE_TYPES).stream()
-                    .map(this::toResponse)
-                    .toList();
+            return toResponses(invoiceRepository.findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, stageId, USAGE_INVOICE_TYPES));
         }
-        return invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES).stream()
-                .map(this::toResponse)
-                .toList();
+        return toResponses(invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES));
     }
 
     @Transactional
@@ -459,19 +465,58 @@ public class InvoiceService {
     }
 
     private void validateInvoiceTotal(SupplierInvoice invoice) {
-        BigDecimal sum = invoiceItemRepository.findByInvoiceId(invoice.getId()).stream()
-                .map(SupplierInvoiceItem::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum = invoiceItemRepository.sumTotalsByInvoiceIds(List.of(invoice.getId())).stream()
+                .findFirst()
+                .map(SupplierInvoiceItemRepository.InvoiceItemTotal::getTotalAmount)
+                .orElse(BigDecimal.ZERO);
         if (sum.compareTo(invoice.getTotalAmount()) != 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice total must remain aligned with invoice items");
         }
     }
 
     private InvoiceDtos.InvoiceResponse toResponse(SupplierInvoice invoice) {
-        BigDecimal consumedAmount = invoice.getInvoiceType() == InvoiceType.SUPPLY ? referenceDataService.invoiceConsumedAmount(invoice.getId()) : invoice.getTotalAmount();
-        BigDecimal outgoingAmount = invoice.getInvoiceType() == InvoiceType.SUPPLY ? referenceDataService.invoiceOutgoingAmount(invoice.getId()) : invoice.getTotalAmount();
-        List<InvoiceDtos.InvoiceItemResponse> items = invoiceItemRepository.findByInvoiceId(invoice.getId()).stream()
-                .map(this::toItemResponse)
+        return toResponses(List.of(invoice)).getFirst();
+    }
+
+    private List<InvoiceDtos.InvoiceResponse> toResponses(List<SupplierInvoice> invoices) {
+        if (invoices.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> invoiceIds = invoices.stream().map(SupplierInvoice::getId).toList();
+        Map<Long, List<SupplierInvoiceItem>> itemsByInvoiceId = invoiceItemRepository.findDetailedByInvoiceIdIn(invoiceIds).stream()
+                .collect(Collectors.groupingBy(item -> item.getInvoice().getId()));
+        List<Long> supplyItemIds = itemsByInvoiceId.values().stream()
+                .flatMap(Collection::stream)
+                .filter(item -> item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY)
+                .map(SupplierInvoiceItem::getId)
+                .distinct()
+                .toList();
+        Map<Long, SourceItemUsageAmounts> consumedBySourceItem = sourceItemUsageAmounts(supplyItemIds, List.of(InvoiceType.SUPPLY_USAGE), null);
+        Map<Long, SourceItemUsageAmounts> outgoingBySourceItem = sourceItemUsageAmounts(supplyItemIds, List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN), null);
+
+        return invoices.stream()
+                .map(invoice -> toResponse(
+                        invoice,
+                        itemsByInvoiceId.getOrDefault(invoice.getId(), Collections.emptyList()),
+                        consumedBySourceItem,
+                        outgoingBySourceItem
+                ))
+                .toList();
+    }
+
+    private InvoiceDtos.InvoiceResponse toResponse(SupplierInvoice invoice,
+                                                   List<SupplierInvoiceItem> items,
+                                                   Map<Long, SourceItemUsageAmounts> consumedBySourceItem,
+                                                   Map<Long, SourceItemUsageAmounts> outgoingBySourceItem) {
+        BigDecimal consumedAmount = invoice.getInvoiceType() == InvoiceType.SUPPLY
+                ? items.stream().map(item -> amountFor(item.getId(), consumedBySourceItem)).reduce(BigDecimal.ZERO, BigDecimal::add)
+                : invoice.getTotalAmount();
+        BigDecimal outgoingAmount = invoice.getInvoiceType() == InvoiceType.SUPPLY
+                ? items.stream().map(item -> amountFor(item.getId(), outgoingBySourceItem)).reduce(BigDecimal.ZERO, BigDecimal::add)
+                : invoice.getTotalAmount();
+        List<InvoiceDtos.InvoiceItemResponse> itemResponses = items.stream()
+                .map(item -> toItemResponse(item, consumedBySourceItem, outgoingBySourceItem))
                 .toList();
         return new InvoiceDtos.InvoiceResponse(
                 invoice.getId(),
@@ -492,16 +537,27 @@ public class InvoiceService {
                 invoice.getStatus().name(),
                 consumedAmount,
                 invoice.getInvoiceType() == InvoiceType.SUPPLY ? invoice.getTotalAmount().subtract(outgoingAmount) : BigDecimal.ZERO,
-                items
+                itemResponses
         );
     }
 
     private InvoiceDtos.InvoiceItemResponse toItemResponse(SupplierInvoiceItem item) {
+        if (item.getInvoice().getInvoiceType() != InvoiceType.SUPPLY) {
+            return toItemResponse(item, Collections.emptyMap(), Collections.emptyMap());
+        }
+        Map<Long, SourceItemUsageAmounts> consumedBySourceItem = sourceItemUsageAmounts(List.of(item.getId()), List.of(InvoiceType.SUPPLY_USAGE), null);
+        Map<Long, SourceItemUsageAmounts> outgoingBySourceItem = sourceItemUsageAmounts(List.of(item.getId()), List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN), null);
+        return toItemResponse(item, consumedBySourceItem, outgoingBySourceItem);
+    }
+
+    private InvoiceDtos.InvoiceItemResponse toItemResponse(SupplierInvoiceItem item,
+                                                           Map<Long, SourceItemUsageAmounts> consumedBySourceItem,
+                                                           Map<Long, SourceItemUsageAmounts> outgoingBySourceItem) {
         BigDecimal consumedAmount = item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY
-                ? referenceDataService.invoiceItemConsumedAmount(item.getId(), null)
+                ? amountFor(item.getId(), consumedBySourceItem)
                 : BigDecimal.ZERO;
         BigDecimal outgoingAmount = item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY
-                ? referenceDataService.invoiceItemOutgoingAmount(item.getId(), null)
+                ? amountFor(item.getId(), outgoingBySourceItem)
                 : BigDecimal.ZERO;
         BigDecimal remainingAmount = item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY
                 ? item.getTotalAmount().subtract(outgoingAmount)
@@ -519,8 +575,35 @@ public class InvoiceService {
                 item.getTotalAmount(),
                 consumedAmount,
                 remainingAmount,
-                item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY ? availableQuantity(item, null) : null
+                item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY
+                        ? (item.getQuantity() == null ? BigDecimal.ZERO : item.getQuantity()).subtract(quantityFor(item.getId(), outgoingBySourceItem))
+                        : null
         );
+    }
+
+    private Map<Long, SourceItemUsageAmounts> sourceItemUsageAmounts(Collection<Long> sourceItemIds,
+                                                                     Collection<InvoiceType> invoiceTypes,
+                                                                     Long excludingInvoiceId) {
+        if (sourceItemIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return invoiceItemRepository.sumOutgoingBySourceItemIds(sourceItemIds, invoiceTypes, excludingInvoiceId).stream()
+                .collect(Collectors.toMap(
+                        SupplierInvoiceItemRepository.SourceItemUsageTotal::getSourceSupplyItemId,
+                        row -> new SourceItemUsageAmounts(defaultZero(row.getTotalAmount()), defaultZero(row.getTotalQuantity()))
+                ));
+    }
+
+    private BigDecimal amountFor(Long sourceItemId, Map<Long, SourceItemUsageAmounts> amountsBySourceItem) {
+        return amountsBySourceItem.getOrDefault(sourceItemId, SourceItemUsageAmounts.ZERO).amount();
+    }
+
+    private BigDecimal quantityFor(Long sourceItemId, Map<Long, SourceItemUsageAmounts> amountsBySourceItem) {
+        return amountsBySourceItem.getOrDefault(sourceItemId, SourceItemUsageAmounts.ZERO).quantity();
+    }
+
+    private BigDecimal defaultZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private void validateSupplySource(SupplierInvoice source) {
@@ -648,13 +731,15 @@ public class InvoiceService {
 
     private BigDecimal availableQuantity(SupplierInvoiceItem sourceItem, Long excludingInvoiceId) {
         BigDecimal initialQuantity = sourceItem.getQuantity() == null ? BigDecimal.ZERO : sourceItem.getQuantity();
-        BigDecimal outgoingQuantity = invoiceItemRepository.findBySourceSupplyItemId(sourceItem.getId()).stream()
-                .filter(item -> item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY_USAGE
-                        || item.getInvoice().getInvoiceType() == InvoiceType.SUPPLY_RETURN)
-                .filter(item -> excludingInvoiceId == null || !item.getInvoice().getId().equals(excludingInvoiceId))
-                .map(SupplierInvoiceItem::getQuantity)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal outgoingQuantity = quantityFor(
+                sourceItem.getId(),
+                sourceItemUsageAmounts(List.of(sourceItem.getId()), List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN), excludingInvoiceId)
+        );
         return initialQuantity.subtract(outgoingQuantity);
+    }
+
+    private record SourceItemUsageAmounts(BigDecimal amount, BigDecimal quantity) {
+        private static final SourceItemUsageAmounts ZERO = new SourceItemUsageAmounts(BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     private String generateNotesFromRequests(List<InvoiceDtos.InvoiceItemUpsertRequest> items) {

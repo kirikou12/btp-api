@@ -114,24 +114,29 @@ public class ReferenceDataService {
     }
 
     private BigDecimal invoiceItemAmountByType(Long invoiceItemId, Long excludingInvoiceId, List<InvoiceType> invoiceTypes) {
-        return invoiceItemRepository.findBySourceSupplyItemId(invoiceItemId).stream()
-                .filter(item -> invoiceTypes.contains(item.getInvoice().getInvoiceType()))
-                .filter(item -> excludingInvoiceId == null || !item.getInvoice().getId().equals(excludingInvoiceId))
-                .map(SupplierInvoiceItem::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return invoiceItemRepository.sumOutgoingBySourceItemIds(List.of(invoiceItemId), invoiceTypes, excludingInvoiceId).stream()
+                .findFirst()
+                .map(SupplierInvoiceItemRepository.SourceItemUsageTotal::getTotalAmount)
+                .orElse(BigDecimal.ZERO);
     }
 
     public BigDecimal invoiceConsumedAmount(Long invoiceId) {
-        return invoiceItemRepository.findByInvoiceId(invoiceId).stream()
-                .map(SupplierInvoiceItem::getId)
-                .map(itemId -> invoiceItemConsumedAmount(itemId, null))
+        List<Long> itemIds = invoiceItemRepository.findByInvoiceId(invoiceId).stream().map(SupplierInvoiceItem::getId).toList();
+        if (itemIds.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return invoiceItemRepository.sumOutgoingBySourceItemIds(itemIds, List.of(InvoiceType.SUPPLY_USAGE), null).stream()
+                .map(SupplierInvoiceItemRepository.SourceItemUsageTotal::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public BigDecimal invoiceOutgoingAmount(Long invoiceId) {
-        return invoiceItemRepository.findByInvoiceId(invoiceId).stream()
-                .map(SupplierInvoiceItem::getId)
-                .map(itemId -> invoiceItemOutgoingAmount(itemId, null))
+        List<Long> itemIds = invoiceItemRepository.findByInvoiceId(invoiceId).stream().map(SupplierInvoiceItem::getId).toList();
+        if (itemIds.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return invoiceItemRepository.sumOutgoingBySourceItemIds(itemIds, List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN), null).stream()
+                .map(SupplierInvoiceItemRepository.SourceItemUsageTotal::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
@@ -148,9 +153,13 @@ public class ReferenceDataService {
     }
 
     public List<SupplierInvoiceItem> usageItemsByProject(Long projectId) {
-        return invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES).stream()
-                .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
+        List<Long> invoiceIds = invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES).stream()
+                .map(SupplierInvoice::getId)
                 .toList();
+        if (invoiceIds.isEmpty()) {
+            return List.of();
+        }
+        return invoiceItemRepository.findDetailedByInvoiceIdIn(invoiceIds);
     }
 
     public List<SupplierInvoice> usageInvoicesByProject(Long projectId) {
@@ -176,15 +185,8 @@ public class ReferenceDataService {
     }
 
     public BigDecimal stageActualCost(Long stageId) {
-        BigDecimal usageCost = USAGE_INVOICE_TYPES.stream()
-                .flatMap(invoiceType -> invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream())
-                .filter(invoice -> invoice.getStage() != null && invoice.getStage().getId().equals(stageId))
-                .flatMap(invoice -> invoiceItemRepository.findByInvoiceId(invoice.getId()).stream())
-                .map(SupplierInvoiceItem::getTotalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal workerPayments = workerPaymentRepository.findByStage_Id(stageId).stream()
-                .map(WorkerPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal usageCost = invoiceItemRepository.sumUsageTotalByStage(stageId, USAGE_INVOICE_TYPES);
+        BigDecimal workerPayments = workerPaymentRepository.sumAmountByStageId(stageId);
         return usageCost.add(workerPayments);
     }
 

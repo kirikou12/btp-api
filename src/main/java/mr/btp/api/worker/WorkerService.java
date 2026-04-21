@@ -1,10 +1,12 @@
 package mr.btp.api.worker;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
@@ -40,12 +42,14 @@ public class WorkerService {
 
     @Transactional(readOnly = true)
     public List<WorkerDtos.WorkerResponse> listWorkers(Long projectId) {
+        List<Worker> workers;
         if (projectId == null) {
-            return workerRepository.findAllByOrderByNameAsc().stream().map(this::toWorkerResponse).toList();
+            workers = workerRepository.findAllByOrderByNameAsc();
+        } else {
+            referenceDataService.getProject(projectId);
+            workers = workerRepository.findByProjectMembershipOrderByNameAsc(projectId);
         }
-
-        referenceDataService.getProject(projectId);
-        return workerRepository.findByProjectMembershipOrderByNameAsc(projectId).stream().map(this::toWorkerResponse).toList();
+        return toWorkerResponses(workers);
     }
 
     @Transactional(readOnly = true)
@@ -240,10 +244,39 @@ public class WorkerService {
     }
 
     private WorkerDtos.WorkerResponse toWorkerResponse(Worker worker) {
-        BigDecimal paid = workerPaymentRepository.findByWorker_IdOrderByPaymentDateDesc(worker.getId()).stream()
-                .map(WorkerPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        List<WorkerDtos.WorkerStageBudgetResponse> stageBudgets = workerStageBudgetRepository.findByWorker_IdOrderByStage_SortOrderAsc(worker.getId()).stream()
+        Map<Long, BigDecimal> paidByWorkerId = workerPaymentRepository.sumAmountsByWorkerIds(List.of(worker.getId())).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        WorkerPaymentRepository.WorkerPaymentTotal::getWorkerId,
+                        WorkerPaymentRepository.WorkerPaymentTotal::getTotalAmount
+                ));
+        Map<Long, List<WorkerStageBudget>> stageBudgetsByWorkerId = workerStageBudgetRepository.findDetailedByWorkerIds(List.of(worker.getId())).stream()
+                .collect(java.util.stream.Collectors.groupingBy(item -> item.getWorker().getId()));
+        return toWorkerResponse(worker, paidByWorkerId.getOrDefault(worker.getId(), BigDecimal.ZERO), stageBudgetsByWorkerId.getOrDefault(worker.getId(), Collections.emptyList()));
+    }
+
+    private List<WorkerDtos.WorkerResponse> toWorkerResponses(List<Worker> workers) {
+        if (workers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> workerIds = workers.stream().map(Worker::getId).toList();
+        Map<Long, BigDecimal> paidByWorkerId = workerPaymentRepository.sumAmountsByWorkerIds(workerIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        WorkerPaymentRepository.WorkerPaymentTotal::getWorkerId,
+                        WorkerPaymentRepository.WorkerPaymentTotal::getTotalAmount
+                ));
+        Map<Long, List<WorkerStageBudget>> stageBudgetsByWorkerId = workerStageBudgetRepository.findDetailedByWorkerIds(workerIds).stream()
+                .collect(java.util.stream.Collectors.groupingBy(item -> item.getWorker().getId()));
+        return workers.stream()
+                .map(worker -> toWorkerResponse(
+                        worker,
+                        paidByWorkerId.getOrDefault(worker.getId(), BigDecimal.ZERO),
+                        stageBudgetsByWorkerId.getOrDefault(worker.getId(), Collections.emptyList())
+                ))
+                .toList();
+    }
+
+    private WorkerDtos.WorkerResponse toWorkerResponse(Worker worker, BigDecimal paid, List<WorkerStageBudget> workerStageBudgets) {
+        List<WorkerDtos.WorkerStageBudgetResponse> stageBudgets = workerStageBudgets.stream()
                 .map(item -> new WorkerDtos.WorkerStageBudgetResponse(
                         item.getStage().getId(),
                         item.getStage().getName(),
