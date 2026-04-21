@@ -19,8 +19,8 @@ import mr.btp.api.supplier.Supplier;
 @Table(name = "supplier_invoices")
 public class SupplierInvoice extends BaseEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "supplier_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id", nullable = true)
     private Supplier supplier;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -21,7 +21,7 @@ import java.util.List;
 @Service
 public class DashboardService {
 
-    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE);
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
 
     private final ProjectRepository projectRepository;
     private final DirectExpenseRepository expenseRepository;

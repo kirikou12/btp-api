@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @Service
 public class InvoiceService {
 
-    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE);
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
 
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
@@ -327,7 +327,7 @@ public class InvoiceService {
         SupplierInvoice invoice = referenceDataService.getInvoice(request.invoiceId());
         SupplierInvoiceItem item = new SupplierInvoiceItem();
         item.setInvoice(invoice);
-        applyItem(item, request);
+        applyItem(item, request, invoice.getInvoiceType());
         SupplierInvoiceItem saved = invoiceItemRepository.save(item);
         validateInvoiceTotal(invoice);
         return toItemResponse(saved);
@@ -340,7 +340,7 @@ public class InvoiceService {
         if (outgoing.compareTo(request.totalAmount()) > 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Item total cannot be reduced below outgoing amount");
         }
-        applyItem(item, request);
+        applyItem(item, request, item.getInvoice().getInvoiceType());
         SupplierInvoiceItem saved = invoiceItemRepository.save(item);
         validateInvoiceTotal(saved.getInvoice());
         return toItemResponse(saved);
@@ -354,7 +354,7 @@ public class InvoiceService {
         if (invoiceType == InvoiceType.SUPPLY_USAGE || invoiceType == InvoiceType.SUPPLY_RETURN) {
             throw new ApiException(HttpStatus.BAD_REQUEST, invoiceType.name() + " invoices must be handled by the dedicated invoice path");
         }
-        if (request.supplierId() == null) {
+        if (invoiceType != InvoiceType.DIRECT_EXPENSE && request.supplierId() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier is required");
         }
         if (request.totalAmount() == null || request.totalAmount().compareTo(BigDecimal.ZERO) < 0) {
@@ -363,12 +363,12 @@ public class InvoiceService {
         if (request.currency() == null || request.currency().isBlank()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Currency is required");
         }
-        if (invoiceType == InvoiceType.DIRECT_USAGE) {
+        if (invoiceType == InvoiceType.DIRECT_USAGE || invoiceType == InvoiceType.DIRECT_EXPENSE) {
             if (request.projectId() == null) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Project is required for direct usage invoices");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Project is required for direct usage and direct expense invoices");
             }
             if (request.stageId() == null) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for direct usage invoices");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for direct usage and direct expense invoices");
             }
             ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId(), false);
             invoice.setStage(stage);
@@ -379,7 +379,7 @@ public class InvoiceService {
         }
         invoice.setInvoiceType(invoiceType);
         invoice.setSourceSupplyInvoice(null);
-        invoice.setSupplier(referenceDataService.getSupplier(request.supplierId()));
+        invoice.setSupplier(request.supplierId() != null ? referenceDataService.getSupplier(request.supplierId()) : null);
         invoice.setReference(request.reference());
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setTotalAmount(request.totalAmount());
@@ -404,14 +404,14 @@ public class InvoiceService {
         items.forEach(request -> {
             SupplierInvoiceItem item = new SupplierInvoiceItem();
             item.setInvoice(invoice);
-            applyItem(item, request);
+            applyItem(item, request, invoice.getInvoiceType());
             invoiceItemRepository.save(item);
         });
     }
 
-    private void applyItem(SupplierInvoiceItem item, InvoiceDtos.InvoiceItemUpsertRequest request) {
+    private void applyItem(SupplierInvoiceItem item, InvoiceDtos.InvoiceItemUpsertRequest request, InvoiceType invoiceType) {
         validateRegularItemRequest(request);
-        if (referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.MATERIAL) {
+        if (invoiceType != InvoiceType.DIRECT_EXPENSE && referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.MATERIAL) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier advance items must use a material category");
         }
         item.setCategory(referenceDataService.getCategory(request.categoryId()));
@@ -425,7 +425,7 @@ public class InvoiceService {
 
     private void validateRegularItemRequest(InvoiceDtos.InvoiceItemUpsertRequest request) {
         if (request.categoryId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Material category is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Category is required");
         }
         if (request.description() == null || request.description().isBlank()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Item description is required");
@@ -457,13 +457,13 @@ public class InvoiceService {
         return new InvoiceDtos.InvoiceResponse(
                 invoice.getId(),
                 invoice.getInvoiceType(),
-                invoice.getSupplier().getId(),
+                invoice.getSupplier() != null ? invoice.getSupplier().getId() : null,
                 invoice.getProject() == null ? null : invoice.getProject().getId(),
                 invoice.getStage() == null ? null : invoice.getStage().getId(),
                 invoice.getStage() == null ? null : invoice.getStage().getName(),
                 invoice.getSourceSupplyInvoice() == null ? null : invoice.getSourceSupplyInvoice().getId(),
                 invoice.getSourceSupplyInvoice() == null ? null : invoice.getSourceSupplyInvoice().getReference(),
-                invoice.getSupplier().getName(),
+                invoice.getSupplier() != null ? invoice.getSupplier().getName() : null,
                 invoice.getReference(),
                 invoice.getInvoiceDate(),
                 invoice.getTotalAmount(),

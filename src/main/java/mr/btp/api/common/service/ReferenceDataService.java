@@ -31,7 +31,7 @@ import java.util.List;
 @Service
 public class ReferenceDataService {
 
-    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE);
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
