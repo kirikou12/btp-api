@@ -411,16 +411,35 @@ public class InvoiceService {
 
     private void applyItem(SupplierInvoiceItem item, InvoiceDtos.InvoiceItemUpsertRequest request, InvoiceType invoiceType) {
         validateRegularItemRequest(request);
-        if (invoiceType != InvoiceType.DIRECT_EXPENSE && referenceDataService.getCategory(request.categoryId()).getType() != CategoryType.MATERIAL) {
+        CategoryType categoryType = referenceDataService.getCategory(request.categoryId()).getType();
+        if (invoiceType != InvoiceType.DIRECT_EXPENSE && categoryType != CategoryType.MATERIAL) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier advance items must use a material category");
         }
         item.setCategory(referenceDataService.getCategory(request.categoryId()));
         item.setSourceSupplyItem(null);
         item.setDescription(request.description().trim());
-        item.setQuantity(request.quantity());
+        item.setQuantity(defaultDirectExpenseMaterialQuantity(request, invoiceType, categoryType));
         item.setUnit(request.unit());
-        item.setUnitPrice(request.unitPrice());
+        item.setUnitPrice(defaultDirectExpenseMaterialUnitPrice(request, invoiceType, categoryType));
         item.setTotalAmount(request.totalAmount());
+    }
+
+    private BigDecimal defaultDirectExpenseMaterialQuantity(InvoiceDtos.InvoiceItemUpsertRequest request,
+                                                           InvoiceType invoiceType,
+                                                           CategoryType categoryType) {
+        if (request.quantity() == null && invoiceType == InvoiceType.DIRECT_EXPENSE && categoryType == CategoryType.MATERIAL) {
+            return BigDecimal.ONE;
+        }
+        return request.quantity();
+    }
+
+    private BigDecimal defaultDirectExpenseMaterialUnitPrice(InvoiceDtos.InvoiceItemUpsertRequest request,
+                                                            InvoiceType invoiceType,
+                                                            CategoryType categoryType) {
+        if (request.unitPrice() == null && invoiceType == InvoiceType.DIRECT_EXPENSE && categoryType == CategoryType.MATERIAL) {
+            return request.totalAmount();
+        }
+        return request.unitPrice();
     }
 
     private void validateRegularItemRequest(InvoiceDtos.InvoiceItemUpsertRequest request) {

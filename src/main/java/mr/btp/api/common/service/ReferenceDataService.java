@@ -3,8 +3,6 @@ package mr.btp.api.common.service;
 import mr.btp.api.category.ExpenseCategory;
 import mr.btp.api.category.ExpenseCategoryRepository;
 import mr.btp.api.common.exception.ApiException;
-import mr.btp.api.expense.DirectExpense;
-import mr.btp.api.expense.DirectExpenseRepository;
 import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
@@ -39,7 +37,6 @@ public class ReferenceDataService {
     private final ConstructionStageRepository stageRepository;
     private final ExpenseCategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
-    private final DirectExpenseRepository expenseRepository;
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
     private final WorkerRepository workerRepository;
@@ -51,7 +48,6 @@ public class ReferenceDataService {
                                 ConstructionStageRepository stageRepository,
                                 ExpenseCategoryRepository categoryRepository,
                                 SupplierRepository supplierRepository,
-                                DirectExpenseRepository expenseRepository,
                                 SupplierInvoiceRepository invoiceRepository,
                                 SupplierInvoiceItemRepository invoiceItemRepository,
                                 WorkerRepository workerRepository,
@@ -62,7 +58,6 @@ public class ReferenceDataService {
         this.stageRepository = stageRepository;
         this.categoryRepository = categoryRepository;
         this.supplierRepository = supplierRepository;
-        this.expenseRepository = expenseRepository;
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.workerRepository = workerRepository;
@@ -88,10 +83,6 @@ public class ReferenceDataService {
 
     public Supplier getSupplier(Long id) {
         return supplierRepository.findById(id).orElseThrow(() -> notFound("Supplier"));
-    }
-
-    public DirectExpense getExpense(Long id) {
-        return expenseRepository.findById(id).orElseThrow(() -> notFound("Expense"));
     }
 
     public SupplierInvoice getInvoice(Long id) {
@@ -148,10 +139,6 @@ public class ReferenceDataService {
         return stageRepository.findByProjectIdOrderBySortOrderAsc(projectId);
     }
 
-    public List<DirectExpense> expensesByProject(Long projectId) {
-        return expenseRepository.findByProjectIdOrderByExpenseDateDesc(projectId);
-    }
-
     public List<WorkerPayment> workerPaymentsByProject(Long projectId) {
         return workerPaymentRepository.findByStage_Project_IdOrderByPaymentDateDesc(projectId);
     }
@@ -171,16 +158,12 @@ public class ReferenceDataService {
     }
 
     public boolean isStageDeletable(Long stageId) {
-        return expenseRepository.countByStageId(stageId) == 0
-                && invoiceRepository.countByStageId(stageId) == 0
+        return invoiceRepository.countByStageId(stageId) == 0
                 && workerPaymentRepository.countByStage_Id(stageId) == 0
                 && workerStageBudgetRepository.countByStageId(stageId) == 0;
     }
 
     public void validateStageDeletion(Long stageId) {
-        if (expenseRepository.countByStageId(stageId) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated expenses");
-        }
         if (invoiceRepository.countByStageId(stageId) > 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated invoices");
         }
@@ -193,10 +176,6 @@ public class ReferenceDataService {
     }
 
     public BigDecimal stageActualCost(Long stageId) {
-        BigDecimal expenses = expenseRepository.findAll().stream()
-                .filter(expense -> expense.getStage() != null && expense.getStage().getId().equals(stageId))
-                .map(DirectExpense::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal usageCost = USAGE_INVOICE_TYPES.stream()
                 .flatMap(invoiceType -> invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(invoiceType).stream())
                 .filter(invoice -> invoice.getStage() != null && invoice.getStage().getId().equals(stageId))
@@ -206,7 +185,7 @@ public class ReferenceDataService {
         BigDecimal workerPayments = workerPaymentRepository.findByStage_Id(stageId).stream()
                 .map(WorkerPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return expenses.add(usageCost).add(workerPayments);
+        return usageCost.add(workerPayments);
     }
 
     private ApiException notFound(String resource) {

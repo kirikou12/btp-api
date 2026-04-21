@@ -1,6 +1,7 @@
 package mr.btp.api.report;
 
 import mr.btp.api.common.service.ReferenceDataService;
+import mr.btp.api.invoice.InvoiceType;
 import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.worker.WorkerPayment;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,11 @@ public class ReportService {
     public List<ReportDtos.StageCostRow> stageCosts(Long projectId) {
         Map<Long, BigDecimal> totals = new LinkedHashMap<>();
         referenceDataService.stagesByProject(projectId).forEach(stage -> totals.put(stage.getId(), BigDecimal.ZERO));
-        referenceDataService.expensesByProject(projectId).forEach(expense -> {
-            if (expense.getStage() != null) {
-                totals.computeIfPresent(expense.getStage().getId(), (key, value) -> value.add(expense.getAmount()));
+        referenceDataService.usageItemsByProject(projectId).forEach(item -> {
+            if (item.getInvoice().getStage() != null) {
+                totals.computeIfPresent(item.getInvoice().getStage().getId(), (key, value) -> value.add(item.getTotalAmount()));
             }
         });
-        referenceDataService.usageItemsByProject(projectId).forEach(item ->
-                totals.computeIfPresent(item.getInvoice().getStage().getId(), (key, value) -> value.add(item.getTotalAmount()))
-        );
         referenceDataService.workerPaymentsByProject(projectId).forEach(payment ->
                 totals.computeIfPresent(payment.getStage().getId(), (key, value) -> value.add(payment.getAmount()))
         );
@@ -45,11 +43,6 @@ public class ReportService {
     @Transactional(readOnly = true)
     public List<ReportDtos.CategoryCostRow> categoryCosts(Long projectId) {
         Map<Long, ReportDtos.CategoryCostRow> rows = new LinkedHashMap<>();
-        referenceDataService.expensesByProject(projectId).forEach(expense -> rows.merge(
-                expense.getCategory().getId(),
-                new ReportDtos.CategoryCostRow(expense.getCategory().getId(), expense.getCategory().getName(), expense.getAmount()),
-                (left, right) -> new ReportDtos.CategoryCostRow(left.categoryId(), left.categoryName(), left.totalCost().add(right.totalCost()))
-        ));
         referenceDataService.usageItemsByProject(projectId).forEach(item -> rows.merge(
                 item.getCategory().getId(),
                 new ReportDtos.CategoryCostRow(item.getCategory().getId(), item.getCategory().getName(), item.getTotalAmount()),
@@ -92,11 +85,8 @@ public class ReportService {
     @Transactional(readOnly = true)
     public List<ReportDtos.ActivityFeedRow> activityFeed(Long projectId) {
         List<ReportDtos.ActivityFeedRow> rows = new ArrayList<>();
-        referenceDataService.expensesByProject(projectId).forEach(expense -> rows.add(
-                new ReportDtos.ActivityFeedRow("EXPENSE", expense.getDescription(), expense.getAmount(), expense.getExpenseDate(), expense.getCategory().getName())
-        ));
         referenceDataService.usageInvoicesByProject(projectId).forEach(invoice -> rows.add(
-                new ReportDtos.ActivityFeedRow("USAGE_INVOICE", invoice.getReference() == null ? "Usage invoice" : invoice.getReference(), invoice.getTotalAmount(), invoice.getInvoiceDate(), usageInvoiceDetails(invoice))
+                new ReportDtos.ActivityFeedRow(activityType(invoice), invoice.getReference() == null ? activityTitle(invoice) : invoice.getReference(), invoice.getTotalAmount(), invoice.getInvoiceDate(), usageInvoiceDetails(invoice))
         ));
         referenceDataService.workerPaymentsByProject(projectId).forEach(payment -> rows.add(
                 new ReportDtos.ActivityFeedRow("WORKER_PAYMENT", payment.getWorker().getName(), payment.getAmount(), payment.getPaymentDate(), workerPaymentDetails(payment))
@@ -113,6 +103,28 @@ public class ReportService {
     }
 
     private String usageInvoiceDetails(SupplierInvoice invoice) {
-        return invoice.getStage().getName() + " • " + invoice.getSupplier().getName();
+        String stageName = invoice.getStage() == null ? "No stage" : invoice.getStage().getName();
+        String supplierName = invoice.getSupplier() == null ? "No supplier" : invoice.getSupplier().getName();
+        return stageName + " • " + supplierName;
+    }
+
+    private String activityType(SupplierInvoice invoice) {
+        if (invoice.getInvoiceType() == InvoiceType.DIRECT_EXPENSE) {
+            return "DIRECT_EXPENSE";
+        }
+        if (invoice.getInvoiceType() == InvoiceType.DIRECT_USAGE) {
+            return "DIRECT_USAGE";
+        }
+        return "USAGE_INVOICE";
+    }
+
+    private String activityTitle(SupplierInvoice invoice) {
+        if (invoice.getInvoiceType() == InvoiceType.DIRECT_EXPENSE) {
+            return "Direct expense invoice";
+        }
+        if (invoice.getInvoiceType() == InvoiceType.DIRECT_USAGE) {
+            return "Direct usage invoice";
+        }
+        return "Usage invoice";
     }
 }

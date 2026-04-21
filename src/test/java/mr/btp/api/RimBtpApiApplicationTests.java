@@ -518,33 +518,47 @@ class RimBtpApiApplicationTests {
 
     @Test
     @Transactional
-    void shouldCreateExpenseEvenWithSubCategory() {
+    void shouldCreateDirectExpenseInvoiceWithoutSupplierAndDefaultMaterialQuantity() {
         Project project = projectRepository.findAll().getFirst();
         ConstructionStage stage = activeStageForProject(project.getId());
         mr.btp.api.category.ExpenseCategory category = categoryRepository.findAll().stream()
-                .filter(c -> c.getType() != mr.btp.api.category.CategoryType.LABOR)
+                .filter(c -> c.getType() == mr.btp.api.category.CategoryType.MATERIAL)
                 .findFirst().orElseThrow();
 
-        mr.btp.api.expense.ExpenseDtos.ExpenseResponse response = ((mr.btp.api.expense.DirectExpenseController) applicationContext.getBean("directExpenseController")).create(
-                new mr.btp.api.expense.ExpenseDtos.ExpenseRequest(
-                        project.getId(),
-                        stage.getId(),
-                        category.getId(),
+        InvoiceDtos.InvoiceResponse response = invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.DIRECT_EXPENSE,
+                null,
+                project.getId(),
+                stage.getId(),
+                null,
+                "DIRECT-TEST",
+                LocalDate.now(),
+                new BigDecimal("100.00"),
+                "MRU",
+                "Direct material expense",
+                "proof.jpg",
+                InvoiceStatus.CONFIRMED,
+                List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
                         null,
-                        new BigDecimal("100.00"),
-                        "Test with subcategory",
-                        "Deprecated SubCategory",
-                        "proof.jpg",
-                        LocalDate.now()
-                )
-        );
+                        null,
+                        category.getId(),
+                        "Direct material expense",
+                        null,
+                        null,
+                        null,
+                        new BigDecimal("100.00")
+                ))
+        ));
 
-        assertThat(response.amount()).isEqualByComparingTo("100.00");
-        assertThat(response.subCategory()).isNull();
+        assertThat(response.invoiceType()).isEqualTo(InvoiceType.DIRECT_EXPENSE);
+        assertThat(response.supplierId()).isNull();
+        assertThat(response.invoiceDate()).isEqualTo(LocalDate.now());
+        assertThat(response.documentRef()).isEqualTo("proof.jpg");
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.quantity()).isEqualByComparingTo(BigDecimal.ONE);
+            assertThat(item.unitPrice()).isEqualByComparingTo("100.00");
+        });
     }
-
-    @Autowired
-    private org.springframework.context.ApplicationContext applicationContext;
 
     @Test
     void shouldExposeActuatorLivenessWithoutAuthentication() throws Exception {

@@ -1,11 +1,11 @@
 # btp-api
 
-Spring Boot 3.3 / Java 21 API for tracking BTP projects, direct expenses, supplier invoices, usage invoices, dashboards, and reports.
+Spring Boot 3.3 / Java 21 API for tracking BTP projects, supplier invoices, direct-expense invoices, usage invoices, dashboards, and reports.
 
 ## Features
 
 - JWT auth with register, login, and `me`
-- CRUD endpoints for projects, stage templates, project stages, categories, suppliers, expenses, and invoices
+- CRUD endpoints for projects, stage templates, project stages, categories, suppliers, and invoices
 - Business rules for invoice reconciliation and usage/return availability prevention
 - Database-backed image upload endpoint for chantier receipts and supplier invoice photos
 - Flyway database migration
@@ -77,7 +77,7 @@ On startup in non-`prod` profiles, the API seeds realistic demo data automatical
 - global stage templates and project-stage instances
 - 3 suppliers
 - supplier invoices with partially used materials
-- direct expenses and usage invoices for dashboards and reports
+- direct-expense invoices and usage invoices for dashboards and reports
 
 Demo login:
 
@@ -106,5 +106,5 @@ Actuator is enabled with a minimal public surface:
 ## Core business rules
 
 - Supplier advances are stored as `SupplierInvoice` and `SupplierInvoiceItem`, but they do not count as chantier cost.
-- Real cost is recognized through `DirectExpense`, usage invoices, and worker payments.
+- Real cost is recognized through direct-expense invoices, usage invoices, and worker payments.
 - Project stages are created and updated directly on each project.

@@ -7,9 +7,8 @@ import java.util.Map;
 import mr.btp.api.category.CategoryType;
 import mr.btp.api.category.ExpenseCategory;
 import mr.btp.api.category.ExpenseCategoryRepository;
-import mr.btp.api.expense.DirectExpense;
-import mr.btp.api.expense.DirectExpenseRepository;
 import mr.btp.api.invoice.InvoiceStatus;
+import mr.btp.api.invoice.InvoiceType;
 import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
@@ -49,7 +48,6 @@ public class DemoDataInitializer {
                                    SupplierRepository supplierRepository,
                                    SupplierInvoiceRepository invoiceRepository,
                                    SupplierInvoiceItemRepository invoiceItemRepository,
-                                   DirectExpenseRepository expenseRepository,
                                    WorkerRepository workerRepository,
                                    WorkerPaymentRepository workerPaymentRepository) {
         return args -> {
@@ -123,9 +121,9 @@ public class DemoDataInitializer {
             saveWorkerPayment(workerPaymentRepository, foundationMason, villaStages.get("Foundation"), "2200.00", today.minusDays(49));
             saveWorkerPayment(workerPaymentRepository, foundationMason, villaStages.get("Elevation"), "1800.00", today.minusDays(18));
             saveWorkerPayment(workerPaymentRepository, electrician, villaStages.get("Elevation"), "650.00", today.minusDays(11));
-            saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Transport"), transit,
+            saveDirectExpenseInvoice(invoiceRepository, invoiceItemRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Transport"),
                 "450.00", "Truck transport", today.minusDays(14));
-            saveExpense(expenseRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Equipment Rental"), transit,
+            saveDirectExpenseInvoice(invoiceRepository, invoiceItemRepository, villaHorizon, villaStages.get("Elevation"), categories.get("Equipment Rental"),
                 "600.00", "Mixer rental", today.minusDays(13));
         };
     }
@@ -249,23 +247,36 @@ public class DemoDataInitializer {
         return repository.save(item);
     }
 
-    private void saveExpense(DirectExpenseRepository repository,
-                             Project project,
-                             ConstructionStage stage,
-                             ExpenseCategory category,
-                             Supplier supplier,
-                             String amount,
-                             String description,
-                             LocalDate date) {
-        DirectExpense expense = new DirectExpense();
-        expense.setProject(project);
-        expense.setStage(stage);
-        expense.setCategory(category);
-        expense.setSupplier(supplier);
-        expense.setAmount(amount(amount));
-        expense.setDescription(description);
-        expense.setExpenseDate(date);
-        repository.save(expense);
+    private void saveDirectExpenseInvoice(SupplierInvoiceRepository invoiceRepository,
+                                          SupplierInvoiceItemRepository invoiceItemRepository,
+                                          Project project,
+                                          ConstructionStage stage,
+                                          ExpenseCategory category,
+                                          String amount,
+                                          String description,
+                                          LocalDate date) {
+        SupplierInvoice invoice = new SupplierInvoice();
+        invoice.setInvoiceType(InvoiceType.DIRECT_EXPENSE);
+        invoice.setProject(project);
+        invoice.setStage(stage);
+        invoice.setReference("DIRECT-" + date + "-" + description.replace(' ', '-'));
+        invoice.setInvoiceDate(date);
+        invoice.setTotalAmount(amount(amount));
+        invoice.setCurrency("EUR");
+        invoice.setStatus(InvoiceStatus.CONFIRMED);
+        invoice.setNotes(description);
+        SupplierInvoice saved = invoiceRepository.save(invoice);
+
+        SupplierInvoiceItem item = new SupplierInvoiceItem();
+        item.setInvoice(saved);
+        item.setCategory(category);
+        item.setDescription(description);
+        if (category.getType() == CategoryType.MATERIAL) {
+            item.setQuantity(BigDecimal.ONE);
+            item.setUnitPrice(amount(amount));
+        }
+        item.setTotalAmount(amount(amount));
+        invoiceItemRepository.save(item);
     }
 
     private Worker saveWorker(WorkerRepository repository, Project project, String name, WorkerType type, String plannedBudget) {

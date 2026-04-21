@@ -1,7 +1,6 @@
 package mr.btp.api.category;
 
 import java.util.List;
-import mr.btp.api.expense.DirectExpenseRepository;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
 import mr.btp.api.common.exception.ApiException;
 import org.springframework.http.HttpStatus;
@@ -11,14 +10,11 @@ import org.springframework.stereotype.Service;
 public class CategoryService {
 
     private final ExpenseCategoryRepository categoryRepository;
-    private final DirectExpenseRepository directExpenseRepository;
     private final SupplierInvoiceItemRepository supplierInvoiceItemRepository;
 
     public CategoryService(ExpenseCategoryRepository categoryRepository,
-                           DirectExpenseRepository directExpenseRepository,
                            SupplierInvoiceItemRepository supplierInvoiceItemRepository) {
         this.categoryRepository = categoryRepository;
-        this.directExpenseRepository = directExpenseRepository;
         this.supplierInvoiceItemRepository = supplierInvoiceItemRepository;
     }
 
@@ -50,10 +46,9 @@ public class CategoryService {
             throw new ApiException(HttpStatus.CONFLICT, "System categories cannot be deleted");
         }
 
-        long directExpenseCount = directExpenseRepository.countByCategoryId(id);
         long supplierInvoiceItemCount = supplierInvoiceItemRepository.countByCategoryId(id);
 
-        if (directExpenseCount > 0 || supplierInvoiceItemCount > 0) {
+        if (supplierInvoiceItemCount > 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Category is in use");
         }
 
