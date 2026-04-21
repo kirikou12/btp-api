@@ -44,6 +44,11 @@ public class InvoiceController {
         return invoiceService.update(id, request);
     }
 
+    @DeleteMapping("/api/supplier-invoices/{id}")
+    public void delete(@PathVariable Long id) {
+        invoiceService.delete(id);
+    }
+
     @PostMapping("/api/usage-invoices")
     public InvoiceDtos.InvoiceResponse createUsage(@Valid @RequestBody InvoiceDtos.UsageInvoiceRequest request) {
         return invoiceService.createUsage(request);

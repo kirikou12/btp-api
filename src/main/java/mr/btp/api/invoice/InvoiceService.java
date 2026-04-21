@@ -311,6 +311,19 @@ public class InvoiceService {
     }
 
     @Transactional
+    public void delete(Long id) {
+        SupplierInvoice invoice = referenceDataService.getInvoice(id);
+        if (invoice.getInvoiceType() == InvoiceType.SUPPLY) {
+            invoiceItemRepository.findByInvoiceId(id).forEach(item -> {
+                if (referenceDataService.invoiceItemOutgoingAmount(item.getId(), null).compareTo(BigDecimal.ZERO) > 0) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete a supply invoice that has recorded outgoing quantities");
+                }
+            });
+        }
+        invoiceRepository.delete(invoice);
+    }
+
+    @Transactional
     public void deleteUsage(Long id) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
         if (invoice.getInvoiceType() != InvoiceType.SUPPLY_USAGE) {
