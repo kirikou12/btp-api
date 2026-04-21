@@ -66,4 +66,9 @@ public class ProjectController {
     public ProjectDtos.StageResponse updateStage(@PathVariable Long id, @Valid @RequestBody ProjectDtos.StageRequest request) {
         return projectService.updateStage(id, request);
     }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/api/project-stages/{id}")
+    public void deleteStage(@PathVariable Long id) {
+        projectService.deleteStage(id);
+    }
 }

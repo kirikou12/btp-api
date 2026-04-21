@@ -22,6 +22,7 @@ import mr.btp.api.worker.Worker;
 import mr.btp.api.worker.WorkerPayment;
 import mr.btp.api.worker.WorkerPaymentRepository;
 import mr.btp.api.worker.WorkerRepository;
+import mr.btp.api.worker.WorkerStageBudgetRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +44,7 @@ public class ReferenceDataService {
     private final SupplierInvoiceItemRepository invoiceItemRepository;
     private final WorkerRepository workerRepository;
     private final WorkerPaymentRepository workerPaymentRepository;
+    private final WorkerStageBudgetRepository workerStageBudgetRepository;
 
     public ReferenceDataService(UserRepository userRepository,
                                 ProjectRepository projectRepository,
@@ -53,7 +55,8 @@ public class ReferenceDataService {
                                 SupplierInvoiceRepository invoiceRepository,
                                 SupplierInvoiceItemRepository invoiceItemRepository,
                                 WorkerRepository workerRepository,
-                                WorkerPaymentRepository workerPaymentRepository) {
+                                WorkerPaymentRepository workerPaymentRepository,
+                                WorkerStageBudgetRepository workerStageBudgetRepository) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
@@ -64,6 +67,7 @@ public class ReferenceDataService {
         this.invoiceItemRepository = invoiceItemRepository;
         this.workerRepository = workerRepository;
         this.workerPaymentRepository = workerPaymentRepository;
+        this.workerStageBudgetRepository = workerStageBudgetRepository;
     }
 
     public User getUser(Long id) {
@@ -164,6 +168,28 @@ public class ReferenceDataService {
 
     public List<SupplierInvoice> usageInvoicesByProject(Long projectId) {
         return invoiceRepository.findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, USAGE_INVOICE_TYPES);
+    }
+
+    public boolean isStageDeletable(Long stageId) {
+        return expenseRepository.countByStageId(stageId) == 0
+                && invoiceRepository.countByStageId(stageId) == 0
+                && workerPaymentRepository.countByStage_Id(stageId) == 0
+                && workerStageBudgetRepository.countByStageId(stageId) == 0;
+    }
+
+    public void validateStageDeletion(Long stageId) {
+        if (expenseRepository.countByStageId(stageId) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated expenses");
+        }
+        if (invoiceRepository.countByStageId(stageId) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated invoices");
+        }
+        if (workerPaymentRepository.countByStage_Id(stageId) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated worker payments");
+        }
+        if (workerStageBudgetRepository.countByStageId(stageId) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated worker budgets");
+        }
     }
 
     public BigDecimal stageActualCost(Long stageId) {

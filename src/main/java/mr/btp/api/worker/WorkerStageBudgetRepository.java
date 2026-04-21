@@ -9,4 +9,6 @@ public interface WorkerStageBudgetRepository extends JpaRepository<WorkerStageBu
     void deleteByWorker_Id(Long workerId);
 
     void deleteByWorker_IdAndStage_Project_Id(Long workerId, Long projectId);
+
+    long countByStageId(Long stageId);
 }
