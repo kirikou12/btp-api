@@ -13,6 +13,8 @@ import mr.btp.api.project.Project;
 import mr.btp.api.project.ProjectRepository;
 import mr.btp.api.project.ProjectStatus;
 import mr.btp.api.project.StageStatus;
+import mr.btp.api.supplier.SupplierDtos;
+import mr.btp.api.supplier.SupplierService;
 import mr.btp.api.worker.WorkerDtos;
 import mr.btp.api.worker.WorkerService;
 import mr.btp.api.worker.WorkerType;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -43,6 +47,9 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private InvoiceService invoiceService;
+
+    @Autowired
+    private SupplierService supplierService;
 
     @Autowired
     private DashboardService dashboardService;
@@ -329,6 +336,37 @@ class RimBtpApiApplicationTests {
         InvoiceDtos.InvoiceResponse sameInvoice = invoiceService.get(invoice.id());
         assertThat(sameInvoice.items()).isNotEmpty();
         assertThat(sameInvoice.items().getFirst().categoryName()).isNotBlank();
+    }
+
+    @Test
+    @Transactional
+    @WithMockUser
+    void shouldDeleteSupplierWithoutInvoices() throws Exception {
+        SupplierDtos.SupplierResponse supplier = supplierService.create(new SupplierDtos.SupplierRequest(
+                "Delete me",
+                null,
+                null,
+                null,
+                null
+        ));
+
+        mockMvc.perform(delete("/api/suppliers/{id}", supplier.id()))
+                .andExpect(status().isOk());
+
+        assertThatThrownBy(() -> supplierService.get(supplier.id()))
+                .hasMessageContaining("Supplier not found");
+    }
+
+    @Test
+    @Transactional
+    @WithMockUser
+    void shouldRejectDeletingSupplierWithInvoices() throws Exception {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+
+        mockMvc.perform(delete("/api/suppliers/{id}", supply.supplierId()))
+                .andExpect(status().isConflict());
+
+        assertThat(supplierService.get(supply.supplierId()).id()).isEqualTo(supply.supplierId());
     }
 
     @Test

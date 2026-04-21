@@ -16,6 +16,7 @@ public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice
     List<SupplierInvoice> findByProjectIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(Long projectId, List<InvoiceType> invoiceTypes);
     List<SupplierInvoice> findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(Long projectId, Long stageId, List<InvoiceType> invoiceTypes);
     long countByStageId(Long stageId);
+    long countBySupplier_Id(Long supplierId);
 
     @Query(value = """
             select invoice

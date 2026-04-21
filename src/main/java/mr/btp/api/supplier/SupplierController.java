@@ -2,6 +2,7 @@ package mr.btp.api.supplier;
 
 import jakarta.validation.Valid;
 import mr.btp.api.common.dto.PageResponse;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,5 +41,10 @@ public class SupplierController {
     @PutMapping("/{id}")
     public SupplierDtos.SupplierResponse update(@PathVariable Long id, @Valid @RequestBody SupplierDtos.SupplierRequest request) {
         return supplierService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long id) {
+        supplierService.delete(id);
     }
 }

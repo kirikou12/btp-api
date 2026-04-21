@@ -1,8 +1,11 @@
 package mr.btp.api.supplier;
 
 import mr.btp.api.common.dto.PageResponse;
+import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
+import mr.btp.api.invoice.SupplierInvoiceRepository;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,10 +14,14 @@ public class SupplierService {
 
     private final SupplierRepository supplierRepository;
     private final ReferenceDataService referenceDataService;
+    private final SupplierInvoiceRepository invoiceRepository;
 
-    public SupplierService(SupplierRepository supplierRepository, ReferenceDataService referenceDataService) {
+    public SupplierService(SupplierRepository supplierRepository,
+                           ReferenceDataService referenceDataService,
+                           SupplierInvoiceRepository invoiceRepository) {
         this.supplierRepository = supplierRepository;
         this.referenceDataService = referenceDataService;
+        this.invoiceRepository = invoiceRepository;
     }
 
     public PageResponse<SupplierDtos.SupplierResponse> list(int page, int size) {
@@ -37,6 +44,15 @@ public class SupplierService {
         Supplier supplier = referenceDataService.getSupplier(id);
         apply(supplier, request);
         return toResponse(supplierRepository.save(supplier));
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        Supplier supplier = referenceDataService.getSupplier(id);
+        if (invoiceRepository.countBySupplier_Id(id) > 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Supplier is in use");
+        }
+        supplierRepository.delete(supplier);
     }
 
     private void apply(Supplier supplier, SupplierDtos.SupplierRequest request) {
