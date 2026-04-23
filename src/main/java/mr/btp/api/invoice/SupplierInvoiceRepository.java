@@ -40,55 +40,6 @@ public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice
                                                 @Param("invoiceType") InvoiceType invoiceType,
                                                 Pageable pageable);
 
-    @Query(value = """
-            select invoice
-            from SupplierInvoice invoice
-            left join fetch invoice.supplier supplier
-            left join fetch invoice.project project
-            left join fetch invoice.stage stage
-            left join fetch invoice.sourceSupplyInvoice source
-            where invoice.project.id = :projectId
-              and invoice.invoiceType in :invoiceTypes
-              and (:stageIdsEmpty = true or invoice.stage.id in :stageIds)
-              and (:supplierIdsEmpty = true or invoice.supplier.id in :supplierIds)
-              and (
-                  :categoryIdsEmpty = true
-                  or exists (
-                      select item.id
-                      from SupplierInvoiceItem item
-                      where item.invoice = invoice
-                        and item.category.id in :categoryIds
-                  )
-              )
-            order by invoice.invoiceDate desc, invoice.id desc
-            """,
-            countQuery = """
-            select count(invoice)
-            from SupplierInvoice invoice
-            where invoice.project.id = :projectId
-              and invoice.invoiceType in :invoiceTypes
-              and (:stageIdsEmpty = true or invoice.stage.id in :stageIds)
-              and (:supplierIdsEmpty = true or invoice.supplier.id in :supplierIds)
-              and (
-                  :categoryIdsEmpty = true
-                  or exists (
-                      select item.id
-                      from SupplierInvoiceItem item
-                      where item.invoice = invoice
-                        and item.category.id in :categoryIds
-                  )
-              )
-            """)
-    Page<SupplierInvoice> findProjectExpenseInvoices(@Param("projectId") Long projectId,
-                                                     @Param("invoiceTypes") List<InvoiceType> invoiceTypes,
-                                                     @Param("stageIdsEmpty") boolean stageIdsEmpty,
-                                                     @Param("stageIds") List<Long> stageIds,
-                                                     @Param("supplierIdsEmpty") boolean supplierIdsEmpty,
-                                                     @Param("supplierIds") List<Long> supplierIds,
-                                                     @Param("categoryIdsEmpty") boolean categoryIdsEmpty,
-                                                     @Param("categoryIds") List<Long> categoryIds,
-                                                     Pageable pageable);
-
     @Query("""
             select invoice
             from SupplierInvoice invoice

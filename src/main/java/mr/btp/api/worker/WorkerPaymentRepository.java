@@ -3,8 +3,6 @@ package mr.btp.api.worker;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,34 +19,6 @@ public interface WorkerPaymentRepository extends JpaRepository<WorkerPayment, Lo
             where (:projectId is null or payment.stage.project.id = :projectId)
             """)
     BigDecimal sumAmountByProjectId(@Param("projectId") Long projectId);
-
-    @Query(value = """
-            select payment
-            from WorkerPayment payment
-            join fetch payment.worker worker
-            join fetch payment.stage stage
-            join fetch stage.project project
-            where project.id = :projectId
-              and (:stageIdsEmpty = true or stage.id in :stageIds)
-              and (:workerIdsEmpty = true or worker.id in :workerIds)
-            order by payment.paymentDate desc, payment.id desc
-            """,
-            countQuery = """
-            select count(payment)
-            from WorkerPayment payment
-            join payment.worker worker
-            join payment.stage stage
-            join stage.project project
-            where project.id = :projectId
-              and (:stageIdsEmpty = true or stage.id in :stageIds)
-              and (:workerIdsEmpty = true or worker.id in :workerIds)
-            """)
-    Page<WorkerPayment> findProjectExpensePayments(@Param("projectId") Long projectId,
-                                                   @Param("stageIdsEmpty") boolean stageIdsEmpty,
-                                                   @Param("stageIds") List<Long> stageIds,
-                                                   @Param("workerIdsEmpty") boolean workerIdsEmpty,
-                                                   @Param("workerIds") List<Long> workerIds,
-                                                   Pageable pageable);
 
     @Query("""
             select payment.stage.project.id as projectId,
