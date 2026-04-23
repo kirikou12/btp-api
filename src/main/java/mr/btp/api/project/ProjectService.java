@@ -1,8 +1,11 @@
 package mr.btp.api.project;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
-import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -81,11 +84,11 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectDtos.StageResponse updateStage(Long stageId, ProjectDtos.StageRequest request) {
+    public ProjectDtos.StageResponse updateStage(Long stageId, JsonNode request) {
         ConstructionStage stage = referenceDataService.getStage(stageId);
 
-        if (request.name() != null && !request.name().isBlank()) {
-            String newName = request.name().trim();
+        if (hasNonNull(request, "name") && !request.get("name").asText().isBlank()) {
+            String newName = request.get("name").asText().trim();
             if (!stage.getName().equalsIgnoreCase(newName)) {
                 stageRepository.findByProjectIdAndNameIgnoreCase(stage.getProject().getId(), newName).ifPresent(s -> {
                     throw new ApiException(HttpStatus.CONFLICT, "Stage with name '" + newName + "' already exists for this project");
@@ -114,32 +117,103 @@ public class ProjectService {
         project.setStatus(request.status() == null ? ProjectStatus.PLANNING : request.status());
     }
 
-    private void apply(ConstructionStage stage, ProjectDtos.StageRequest request) {
-        if (request.name() != null && !request.name().isBlank()) {
-            stage.setName(request.name().trim());
+    private void apply(ConstructionStage stage, JsonNode request) {
+        if (hasNonNull(request, "name") && !request.get("name").asText().isBlank()) {
+            stage.setName(request.get("name").asText().trim());
         }
-        if (request.sortOrder() != null) {
-            stage.setSortOrder(request.sortOrder());
+        if (hasNonNull(request, "sortOrder")) {
+            int sortOrder = readInteger(request, "sortOrder");
+            if (sortOrder < 1) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage sort order must be at least 1");
+            }
+            stage.setSortOrder(sortOrder);
         }
-        if (request.startDate() != null && request.endDate() != null && request.endDate().isBefore(request.startDate())) {
+
+        StageStatus nextStatus = hasNonNull(request, "status") ? parseStageStatus(request.get("status").asText()) : stage.getStatus();
+        LocalDate nextStartDate = readDate(request, "startDate", stage.getStartDate());
+        LocalDate nextEndDate = readDate(request, "endDate", stage.getEndDate());
+        BigDecimal nextPlannedBudget = readBigDecimal(request, "plannedBudget", stage.getPlannedBudget());
+
+        if (nextStartDate != null && nextEndDate != null && nextEndDate.isBefore(nextStartDate)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage end date cannot be before start date");
         }
-        stage.setStatus(request.status());
-        stage.setStartDate(request.startDate());
-        stage.setEndDate(request.endDate());
-        stage.setPlannedBudget(request.plannedBudget());
+        stage.setStatus(nextStatus);
+        stage.setStartDate(nextStartDate);
+        stage.setEndDate(nextEndDate);
+        stage.setPlannedBudget(nextPlannedBudget);
 
-        if (request.status() == StageStatus.NOT_STARTED) {
+        if (nextStatus == StageStatus.NOT_STARTED) {
             stage.setProgressPercent(0);
             return;
         }
 
-        if (request.status() == StageStatus.COMPLETED) {
+        if (nextStatus == StageStatus.COMPLETED) {
             stage.setProgressPercent(100);
             return;
         }
 
-        stage.setProgressPercent(request.progressPercent() == null ? stage.getProgressPercent() : request.progressPercent());
+        if (hasNonNull(request, "progressPercent")) {
+            int progressPercent = readInteger(request, "progressPercent");
+            if (progressPercent < 0 || progressPercent > 100) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage progress percent must be between 0 and 100");
+            }
+            stage.setProgressPercent(progressPercent);
+        }
+    }
+
+    private boolean hasNonNull(JsonNode request, String field) {
+        return request != null && request.has(field) && !request.get(field).isNull();
+    }
+
+    private StageStatus parseStageStatus(String value) {
+        try {
+            return StageStatus.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported stage status");
+        }
+    }
+
+    private LocalDate readDate(JsonNode request, String field, LocalDate fallback) {
+        if (request == null || !request.has(field)) {
+            return fallback;
+        }
+        if (request.get(field).isNull() || request.get(field).asText().isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(request.get(field).asText());
+        } catch (RuntimeException exception) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage " + field + " must be an ISO date");
+        }
+    }
+
+    private int readInteger(JsonNode request, String field) {
+        JsonNode value = request.get(field);
+        if (!value.canConvertToInt()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage " + field + " must be an integer");
+        }
+        return value.asInt();
+    }
+
+    private BigDecimal readBigDecimal(JsonNode request, String field, BigDecimal fallback) {
+        if (request == null || !request.has(field)) {
+            return fallback;
+        }
+        if (request.get(field).isNull()) {
+            return null;
+        }
+        if (!request.get(field).isNumber()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage planned budget must be numeric");
+        }
+        try {
+            BigDecimal value = request.get(field).decimalValue();
+            if (value.compareTo(BigDecimal.ZERO) < 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage planned budget cannot be negative");
+            }
+            return value;
+        } catch (NumberFormatException exception) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage planned budget must be numeric");
+        }
     }
 
     private int nextSortOrder(Long projectId) {

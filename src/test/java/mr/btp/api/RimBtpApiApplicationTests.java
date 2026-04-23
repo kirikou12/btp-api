@@ -491,6 +491,30 @@ class RimBtpApiApplicationTests {
 
     @Test
     @Transactional
+    void shouldAllowCreatingWorkerPaymentOnCompletedStageWhenUserContinuesAnyway() {
+        ConstructionStage completedStage = stageByName("Demo depenses CSV", "Fondation");
+        assertThat(completedStage.getStatus()).isEqualTo(StageStatus.COMPLETED);
+
+        WorkerDtos.WorkerResponse worker = workerService.listWorkers(completedStage.getProject().getId()).stream()
+                .findFirst()
+                .orElseThrow();
+
+        WorkerDtos.WorkerPaymentResponse payment = workerService.createPayment(new WorkerDtos.WorkerPaymentRequest(
+                worker.id(),
+                completedStage.getProject().getId(),
+                completedStage.getId(),
+                new BigDecimal("125.00"),
+                LocalDate.now(),
+                "late-receipt.jpg"
+        ));
+
+        assertThat(payment.stageId()).isEqualTo(completedStage.getId());
+        assertThat(payment.amount()).isEqualByComparingTo("125.00");
+        assertThat(payment.documentRef()).isEqualTo("late-receipt.jpg");
+    }
+
+    @Test
+    @Transactional
     void shouldAllowUpdatingWorkerPaymentOnCompletedStageForCorrections() {
         ConstructionStage completedStage = stageByName("Demo depenses CSV", "Fondation");
         assertThat(completedStage.getStatus()).isEqualTo(StageStatus.COMPLETED);
@@ -596,6 +620,45 @@ class RimBtpApiApplicationTests {
             assertThat(item.quantity()).isEqualByComparingTo(BigDecimal.ONE);
             assertThat(item.unitPrice()).isEqualByComparingTo("100.00");
         });
+    }
+
+    @Test
+    @Transactional
+    void shouldAllowCreatingDirectExpenseInvoiceOnCompletedStageWhenUserContinuesAnyway() {
+        ConstructionStage completedStage = stageByName("Demo depenses CSV", "Fondation");
+        assertThat(completedStage.getStatus()).isEqualTo(StageStatus.COMPLETED);
+        mr.btp.api.category.ExpenseCategory category = categoryRepository.findAll().stream()
+                .filter(c -> c.getType() == mr.btp.api.category.CategoryType.MATERIAL)
+                .findFirst().orElseThrow();
+
+        InvoiceDtos.InvoiceResponse response = invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.DIRECT_EXPENSE,
+                null,
+                completedStage.getProject().getId(),
+                completedStage.getId(),
+                null,
+                "DIRECT-COMPLETED-STAGE",
+                LocalDate.now(),
+                new BigDecimal("75.00"),
+                "MRU",
+                "Late direct expense",
+                "late-direct-expense.jpg",
+                InvoiceStatus.CONFIRMED,
+                List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+                        null,
+                        null,
+                        category.getId(),
+                        "Late direct expense",
+                        null,
+                        null,
+                        null,
+                        new BigDecimal("75.00")
+                ))
+        ));
+
+        assertThat(response.invoiceType()).isEqualTo(InvoiceType.DIRECT_EXPENSE);
+        assertThat(response.stageId()).isEqualTo(completedStage.getId());
+        assertThat(response.totalAmount()).isEqualByComparingTo("75.00");
     }
 
     @Test

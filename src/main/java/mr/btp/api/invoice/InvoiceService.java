@@ -5,7 +5,6 @@ import mr.btp.api.common.dto.PageResponse;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
-import mr.btp.api.project.StageStatus;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -168,7 +167,7 @@ public class InvoiceService {
 
     private InvoiceDtos.InvoiceResponse createUsageFromInvoiceRequest(InvoiceDtos.InvoiceRequest request) {
         SupplierInvoice source = getUsageSource(request);
-        ConstructionStage stage = getUsageStage(request, false);
+        ConstructionStage stage = getUsageStage(request);
 
         SupplierInvoice invoice = new SupplierInvoice();
         applyUsageInvoice(invoice, request, source, stage);
@@ -188,7 +187,7 @@ public class InvoiceService {
 
     private InvoiceDtos.InvoiceResponse updateUsageFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request) {
         SupplierInvoice source = getUsageSource(request);
-        ConstructionStage stage = getUsageStage(request, true);
+        ConstructionStage stage = getUsageStage(request);
 
         List<SupplierInvoiceItem> usageItems = buildUsageItems(invoice, source, request.items(), invoice.getId());
         applyUsageInvoice(invoice, request, source, stage);
@@ -260,14 +259,14 @@ public class InvoiceService {
         return source;
     }
 
-    private ConstructionStage getUsageStage(InvoiceDtos.InvoiceRequest request, boolean allowCompletedStage) {
+    private ConstructionStage getUsageStage(InvoiceDtos.InvoiceRequest request) {
         if (request.projectId() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Project is required for usage invoices");
         }
         if (request.stageId() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for usage invoices");
         }
-        return validateUsageStage(request.projectId(), request.stageId(), allowCompletedStage);
+        return validateUsageStage(request.projectId(), request.stageId());
     }
 
     private void applyUsageInvoice(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, SupplierInvoice source, ConstructionStage stage) {
@@ -389,7 +388,7 @@ public class InvoiceService {
             if (request.stageId() == null) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for direct usage and direct expense invoices");
             }
-            ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId(), false);
+            ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId());
             invoice.setStage(stage);
             invoice.setProject(stage.getProject());
         } else {
@@ -625,13 +624,10 @@ public class InvoiceService {
         }
     }
 
-    private ConstructionStage validateUsageStage(Long projectId, Long stageId, boolean allowCompletedStage) {
+    private ConstructionStage validateUsageStage(Long projectId, Long stageId) {
         ConstructionStage stage = referenceDataService.getStage(stageId);
         if (!stage.getProject().getId().equals(projectId)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
-        }
-        if (stage.getStatus() == StageStatus.COMPLETED && !allowCompletedStage) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record usage on a completed stage");
         }
         return stage;
     }

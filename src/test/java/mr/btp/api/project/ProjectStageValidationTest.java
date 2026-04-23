@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -96,6 +97,54 @@ class ProjectStageValidationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldPreserveOmittedFieldsWhenUpdatingOnlyStageStatus() throws Exception {
+        Project project = createProject("Test Project Status Only");
+        ConstructionStage stage = createStage(project, "Status Only");
+        stage.setStartDate(LocalDate.of(2026, 1, 10));
+        stage.setEndDate(LocalDate.of(2026, 2, 10));
+        stage.setPlannedBudget(new BigDecimal("2500.00"));
+        stage.setProgressPercent(35);
+        stageRepository.save(stage);
+
+        mockMvc.perform(put("/api/project-stages/" + stage.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"IN_PROGRESS"}
+                        """))
+                .andExpect(status().isOk());
+
+        ConstructionStage updated = stageRepository.findById(stage.getId()).orElseThrow();
+        assertThat(updated.getStatus()).isEqualTo(StageStatus.IN_PROGRESS);
+        assertThat(updated.getStartDate()).isEqualTo(LocalDate.of(2026, 1, 10));
+        assertThat(updated.getEndDate()).isEqualTo(LocalDate.of(2026, 2, 10));
+        assertThat(updated.getPlannedBudget()).isEqualByComparingTo("2500.00");
+        assertThat(updated.getProgressPercent()).isEqualTo(35);
+    }
+
+    @Test
+    void shouldClearNullableFieldsWhenExplicitlySetToNull() throws Exception {
+        Project project = createProject("Test Project Clear Fields");
+        ConstructionStage stage = createStage(project, "Clear Fields");
+        stage.setStartDate(LocalDate.of(2026, 1, 10));
+        stage.setEndDate(LocalDate.of(2026, 2, 10));
+        stage.setPlannedBudget(new BigDecimal("2500.00"));
+        stageRepository.save(stage);
+
+        mockMvc.perform(put("/api/project-stages/" + stage.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"IN_PROGRESS","startDate":null,"endDate":null,"plannedBudget":null}
+                        """))
+                .andExpect(status().isOk());
+
+        ConstructionStage updated = stageRepository.findById(stage.getId()).orElseThrow();
+        assertThat(updated.getStatus()).isEqualTo(StageStatus.IN_PROGRESS);
+        assertThat(updated.getStartDate()).isNull();
+        assertThat(updated.getEndDate()).isNull();
+        assertThat(updated.getPlannedBudget()).isNull();
     }
 
     private Project createProject(String name) {

@@ -12,7 +12,6 @@ import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.Project;
-import mr.btp.api.project.StageStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,14 +103,14 @@ public class WorkerService {
     @Transactional
     public WorkerDtos.WorkerPaymentResponse createPayment(WorkerDtos.WorkerPaymentRequest request) {
         WorkerPayment payment = new WorkerPayment();
-        apply(payment, request, false);
+        apply(payment, request);
         return toPaymentResponse(workerPaymentRepository.save(payment));
     }
 
     @Transactional
     public WorkerDtos.WorkerPaymentResponse updatePayment(Long id, WorkerDtos.WorkerPaymentRequest request) {
         WorkerPayment payment = referenceDataService.getWorkerPayment(id);
-        apply(payment, request, true);
+        apply(payment, request);
         return toPaymentResponse(workerPaymentRepository.save(payment));
     }
 
@@ -222,13 +221,10 @@ public class WorkerService {
         workerRepository.save(worker);
     }
 
-    private void apply(WorkerPayment payment, WorkerDtos.WorkerPaymentRequest request, boolean allowCompletedStage) {
+    private void apply(WorkerPayment payment, WorkerDtos.WorkerPaymentRequest request) {
         ConstructionStage stage = referenceDataService.getStage(request.stageId());
         if (!stage.getProject().getId().equals(request.projectId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
-        }
-        if (stage.getStatus() == StageStatus.COMPLETED && !allowCompletedStage) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot record a worker payment on a completed stage");
         }
 
         Worker worker = referenceDataService.getWorker(request.workerId());

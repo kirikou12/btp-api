@@ -1,5 +1,6 @@
 package mr.btp.api.project;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import java.util.List;
 import mr.btp.api.common.dto.PageResponse;
@@ -63,7 +64,7 @@ public class ProjectController {
     }
 
     @PutMapping("/api/project-stages/{id}")
-    public ProjectDtos.StageResponse updateStage(@PathVariable Long id, @Valid @RequestBody ProjectDtos.StageRequest request) {
+    public ProjectDtos.StageResponse updateStage(@PathVariable Long id, @RequestBody JsonNode request) {
         return projectService.updateStage(id, request);
     }
 
