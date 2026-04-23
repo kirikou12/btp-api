@@ -62,7 +62,8 @@ public final class InvoiceDtos {
             BigDecimal quantity,
             String unit,
             BigDecimal unitPrice,
-            BigDecimal totalAmount
+            BigDecimal totalAmount,
+            Long id
     ) {
     }
 

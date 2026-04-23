@@ -12,10 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -116,13 +119,12 @@ public class InvoiceService {
         }
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
-        invoiceItemRepository.findByInvoiceId(id).forEach(item -> {
-            if (referenceDataService.invoiceItemOutgoingAmount(item.getId(), null).compareTo(BigDecimal.ZERO) > 0) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot replace items on an invoice that has recorded outgoing quantities");
-            }
-        });
-        invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(id));
-        replaceItems(invoice, request.items());
+        if (invoice.getInvoiceType() == InvoiceType.SUPPLY) {
+            syncSupplyItems(invoice, request.items());
+        } else {
+            invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(id));
+            replaceItems(invoice, request.items());
+        }
         return toResponse(invoice);
     }
 
@@ -157,6 +159,7 @@ public class InvoiceService {
                                 null,
                                 null,
                                 item.quantityUsed(),
+                                null,
                                 null,
                                 null,
                                 null
@@ -425,6 +428,134 @@ public class InvoiceService {
             applyItem(item, request, invoice.getInvoiceType());
             invoiceItemRepository.save(item);
         });
+    }
+
+    private void syncSupplyItems(SupplierInvoice invoice, List<InvoiceDtos.InvoiceItemUpsertRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice must contain at least one item");
+        }
+
+        BigDecimal itemSum = BigDecimal.ZERO;
+        for (InvoiceDtos.InvoiceItemUpsertRequest request : requests) {
+            validateRegularItemRequest(request);
+            itemSum = itemSum.add(request.totalAmount());
+        }
+        if (itemSum.compareTo(invoice.getTotalAmount()) != 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice total must equal the sum of invoice items");
+        }
+
+        List<SupplierInvoiceItem> existingItems = invoiceItemRepository.findByInvoiceId(invoice.getId());
+        List<ResolvedSupplyItemUpdate> resolvedRequests = resolveSupplyItemUpdates(existingItems, requests);
+        Set<Long> retainedItemIds = new HashSet<>();
+        Set<Long> outgoingInvoiceIdsToRecalculate = new HashSet<>();
+
+        for (ResolvedSupplyItemUpdate resolvedRequest : resolvedRequests) {
+            SupplierInvoiceItem item = resolvedRequest.existingItem();
+            if (item == null) {
+                item = new SupplierInvoiceItem();
+                item.setInvoice(invoice);
+            } else {
+                retainedItemIds.add(item.getId());
+                validateSupplyItemEdit(item, resolvedRequest.request());
+            }
+            applyItem(item, resolvedRequest.request(), invoice.getInvoiceType());
+            SupplierInvoiceItem saved = invoiceItemRepository.save(item);
+            syncDependentOutgoingItems(saved, outgoingInvoiceIdsToRecalculate);
+        }
+
+        for (SupplierInvoiceItem existingItem : existingItems) {
+            if (retainedItemIds.contains(existingItem.getId())) {
+                continue;
+            }
+            validateSupplyItemDeletion(existingItem);
+            invoiceItemRepository.delete(existingItem);
+        }
+
+        recalculateInvoiceTotals(outgoingInvoiceIdsToRecalculate);
+    }
+
+    private List<ResolvedSupplyItemUpdate> resolveSupplyItemUpdates(List<SupplierInvoiceItem> existingItems,
+                                                                    List<InvoiceDtos.InvoiceItemUpsertRequest> requests) {
+        Map<Long, SupplierInvoiceItem> existingById = existingItems.stream()
+                .collect(Collectors.toMap(SupplierInvoiceItem::getId, Function.identity()));
+        boolean usesExplicitIds = requests.stream().anyMatch(request -> request.id() != null);
+        Set<Long> usedIds = new HashSet<>();
+        List<ResolvedSupplyItemUpdate> resolved = new ArrayList<>();
+
+        for (int index = 0; index < requests.size(); index++) {
+            InvoiceDtos.InvoiceItemUpsertRequest request = requests.get(index);
+            SupplierInvoiceItem existingItem = null;
+            if (request.id() != null) {
+                existingItem = existingById.get(request.id());
+                if (existingItem == null) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice item does not belong to the invoice being updated");
+                }
+                if (!usedIds.add(existingItem.getId())) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice item cannot be updated more than once");
+                }
+            } else if (!usesExplicitIds && index < existingItems.size()) {
+                existingItem = existingItems.get(index);
+                usedIds.add(existingItem.getId());
+            }
+            resolved.add(new ResolvedSupplyItemUpdate(existingItem, request));
+        }
+
+        return resolved;
+    }
+
+    private void validateSupplyItemEdit(SupplierInvoiceItem existingItem, InvoiceDtos.InvoiceItemUpsertRequest request) {
+        SourceItemUsageAmounts outgoing = outgoingAmounts(existingItem.getId(), null);
+        BigDecimal requestedQuantity = request.quantity() == null ? BigDecimal.ZERO : request.quantity();
+        if (requestedQuantity.compareTo(outgoing.quantity()) < 0) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "Item '" + existingItem.getDescription() + "' quantity cannot be reduced below outgoing quantity. Outgoing quantity: "
+                            + outgoing.quantity().toPlainString()
+            );
+        }
+        if (request.totalAmount().compareTo(outgoing.amount()) < 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Item total amount cannot be reduced below outgoing amount");
+        }
+        if (outgoing.quantity().compareTo(BigDecimal.ZERO) > 0 && request.unitPrice() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Unit price is required when outgoing quantities exist");
+        }
+    }
+
+    private void validateSupplyItemDeletion(SupplierInvoiceItem item) {
+        if (outgoingAmounts(item.getId(), null).quantity().compareTo(BigDecimal.ZERO) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete a supply item that has recorded outgoing quantities");
+        }
+    }
+
+    private void syncDependentOutgoingItems(SupplierInvoiceItem sourceItem, Set<Long> outgoingInvoiceIdsToRecalculate) {
+        if (sourceItem.getId() == null) {
+            return;
+        }
+        List<SupplierInvoiceItem> outgoingItems = invoiceItemRepository.findBySourceSupplyItemId(sourceItem.getId());
+        if (outgoingItems.isEmpty()) {
+            return;
+        }
+        if (sourceItem.getUnitPrice() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Source SUPPLY item must have unit price when outgoing quantities exist");
+        }
+
+        for (SupplierInvoiceItem outgoingItem : outgoingItems) {
+            outgoingItem.setCategory(sourceItem.getCategory());
+            outgoingItem.setDescription(sourceItem.getDescription());
+            outgoingItem.setUnit(sourceItem.getUnit());
+            outgoingItem.setUnitPrice(sourceItem.getUnitPrice());
+            outgoingItem.setTotalAmount(defaultZero(outgoingItem.getQuantity()).multiply(sourceItem.getUnitPrice()));
+            invoiceItemRepository.save(outgoingItem);
+            outgoingInvoiceIdsToRecalculate.add(outgoingItem.getInvoice().getId());
+        }
+    }
+
+    private void recalculateInvoiceTotals(Set<Long> invoiceIds) {
+        for (Long invoiceId : invoiceIds) {
+            SupplierInvoice invoice = referenceDataService.getInvoice(invoiceId);
+            invoice.setTotalAmount(sumItemTotals(invoiceItemRepository.findByInvoiceId(invoiceId)));
+            invoiceRepository.save(invoice);
+        }
     }
 
     private void applyItem(SupplierInvoiceItem item, InvoiceDtos.InvoiceItemUpsertRequest request, InvoiceType invoiceType) {
@@ -740,15 +871,21 @@ public class InvoiceService {
 
     private BigDecimal availableQuantity(SupplierInvoiceItem sourceItem, Long excludingInvoiceId) {
         BigDecimal initialQuantity = sourceItem.getQuantity() == null ? BigDecimal.ZERO : sourceItem.getQuantity();
-        BigDecimal outgoingQuantity = quantityFor(
-                sourceItem.getId(),
-                sourceItemUsageAmounts(List.of(sourceItem.getId()), List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN), excludingInvoiceId)
-        );
+        BigDecimal outgoingQuantity = outgoingAmounts(sourceItem.getId(), excludingInvoiceId).quantity();
         return initialQuantity.subtract(outgoingQuantity);
+    }
+
+    private SourceItemUsageAmounts outgoingAmounts(Long sourceItemId, Long excludingInvoiceId) {
+        return sourceItemUsageAmounts(List.of(sourceItemId), List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_RETURN), excludingInvoiceId)
+                .getOrDefault(sourceItemId, SourceItemUsageAmounts.ZERO);
     }
 
     private record SourceItemUsageAmounts(BigDecimal amount, BigDecimal quantity) {
         private static final SourceItemUsageAmounts ZERO = new SourceItemUsageAmounts(BigDecimal.ZERO, BigDecimal.ZERO);
+    }
+
+    private record ResolvedSupplyItemUpdate(SupplierInvoiceItem existingItem,
+                                            InvoiceDtos.InvoiceItemUpsertRequest request) {
     }
 
     private String generateNotesFromRequests(List<InvoiceDtos.InvoiceItemUpsertRequest> items) {

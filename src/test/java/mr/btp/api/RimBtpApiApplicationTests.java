@@ -92,7 +92,7 @@ class RimBtpApiApplicationTests {
                 supply.items().stream()
                         .filter(item -> item.availableQuantity().compareTo(BigDecimal.ONE) >= 0)
                         .limit(2)
-                        .map(item -> new InvoiceDtos.InvoiceItemUpsertRequest(null, item.id(), null, null, BigDecimal.ONE, null, null, null))
+                        .map(item -> new InvoiceDtos.InvoiceItemUpsertRequest(null, item.id(), null, null, BigDecimal.ONE, null, null, null, null))
                         .toList()
         ));
 
@@ -150,7 +150,8 @@ class RimBtpApiApplicationTests {
                         BigDecimal.ONE,
                         material.unit(),
                         new BigDecimal("125.00"),
-                        new BigDecimal("125.00")
+                        new BigDecimal("125.00"),
+                        null
                 ))
         ));
 
@@ -265,7 +266,7 @@ class RimBtpApiApplicationTests {
                 "Return updated",
                 null,
                 InvoiceStatus.CONFIRMED,
-                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, new BigDecimal("3.00"), null, null, null))
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, new BigDecimal("3.00"), null, null, null, null))
         ));
 
         assertThat(updated.totalAmount()).isEqualByComparingTo("300.00");
@@ -284,8 +285,145 @@ class RimBtpApiApplicationTests {
                 "Return too much",
                 null,
                 InvoiceStatus.CONFIRMED,
-                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, new BigDecimal("11.00"), null, null, null))
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, new BigDecimal("11.00"), null, null, null, null))
         ))).hasMessageContaining("Return quantity exceeds available supply quantity");
+    }
+
+    @Test
+    @Transactional
+    void shouldUpdateSupplyInvoiceWithOutgoingItemsAndPropagateChanges() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
+
+        InvoiceDtos.InvoiceResponse usage = invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                supply.id(),
+                supply.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "Usage before supply edit",
+                null,
+                InvoiceStatus.CONFIRMED,
+                List.of(new InvoiceDtos.UsageInvoiceItemRequest(sourceItem.id(), new BigDecimal("4.00")))
+        ));
+        InvoiceDtos.InvoiceResponse supplyReturn = createReturn(supply, sourceItem, BigDecimal.ONE);
+        Long updatedCategoryId = anotherMaterialCategoryId(sourceItem.categoryId());
+
+        InvoiceDtos.InvoiceResponse updatedSupply = invoiceService.update(supply.id(), new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY,
+                supply.supplierId(),
+                supply.projectId(),
+                null,
+                null,
+                "SUPPLY-UPDATED",
+                LocalDate.now(),
+                new BigDecimal("1160.00"),
+                supply.currency(),
+                "Updated supply after outgoing entries",
+                null,
+                InvoiceStatus.CONFIRMED,
+                List.of(
+                        new InvoiceDtos.InvoiceItemUpsertRequest(
+                                null,
+                                null,
+                                updatedCategoryId,
+                                "Updated source item",
+                                new BigDecimal("8.00"),
+                                sourceItem.unit(),
+                                new BigDecimal("120.00"),
+                                new BigDecimal("960.00"),
+                                sourceItem.id()
+                        ),
+                        new InvoiceDtos.InvoiceItemUpsertRequest(
+                                null,
+                                null,
+                                sourceItem.categoryId(),
+                                "Additional material",
+                                new BigDecimal("2.00"),
+                                sourceItem.unit(),
+                                new BigDecimal("100.00"),
+                                new BigDecimal("200.00"),
+                                null
+                        )
+                )
+        ));
+
+        assertThat(updatedSupply.items()).hasSize(2);
+        InvoiceDtos.InvoiceResponse refreshedSupply = invoiceService.get(supply.id());
+        InvoiceDtos.InvoiceItemResponse refreshedSourceItem = refreshedSupply.items().stream()
+                .filter(item -> item.id().equals(sourceItem.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(refreshedSourceItem.categoryId()).isEqualTo(updatedCategoryId);
+        assertThat(refreshedSourceItem.description()).isEqualTo("Updated source item");
+        assertThat(refreshedSourceItem.quantity()).isEqualByComparingTo("8.00");
+        assertThat(refreshedSourceItem.unitPrice()).isEqualByComparingTo("120.00");
+        assertThat(refreshedSourceItem.availableQuantity()).isEqualByComparingTo("3.00");
+
+        InvoiceDtos.InvoiceResponse refreshedUsage = invoiceService.get(usage.id());
+        assertThat(refreshedUsage.totalAmount()).isEqualByComparingTo("480.00");
+        assertThat(refreshedUsage.items()).singleElement().satisfies(item -> {
+            assertThat(item.categoryId()).isEqualTo(updatedCategoryId);
+            assertThat(item.description()).isEqualTo("Updated source item");
+            assertThat(item.unitPrice()).isEqualByComparingTo("120.00");
+            assertThat(item.totalAmount()).isEqualByComparingTo("480.00");
+        });
+
+        InvoiceDtos.InvoiceResponse refreshedReturn = invoiceService.get(supplyReturn.id());
+        assertThat(refreshedReturn.totalAmount()).isEqualByComparingTo("120.00");
+        assertThat(refreshedReturn.items()).singleElement().satisfies(item -> {
+            assertThat(item.categoryId()).isEqualTo(updatedCategoryId);
+            assertThat(item.description()).isEqualTo("Updated source item");
+            assertThat(item.unitPrice()).isEqualByComparingTo("120.00");
+            assertThat(item.totalAmount()).isEqualByComparingTo("120.00");
+        });
+    }
+
+    @Test
+    @Transactional
+    void shouldRejectSupplyQuantityDecreaseBelowOutgoingQuantity() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
+
+        invoiceService.createUsage(new InvoiceDtos.UsageInvoiceRequest(
+                supply.id(),
+                supply.projectId(),
+                activeStage.getId(),
+                LocalDate.now(),
+                "Usage before invalid supply edit",
+                null,
+                InvoiceStatus.CONFIRMED,
+                List.of(new InvoiceDtos.UsageInvoiceItemRequest(sourceItem.id(), new BigDecimal("4.00")))
+        ));
+        createReturn(supply, sourceItem, new BigDecimal("2.00"));
+
+        assertThatThrownBy(() -> invoiceService.update(supply.id(), new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY,
+                supply.supplierId(),
+                supply.projectId(),
+                null,
+                null,
+                "SUPPLY-TOO-SMALL",
+                LocalDate.now(),
+                new BigDecimal("500.00"),
+                supply.currency(),
+                "Too small after outgoing entries",
+                null,
+                InvoiceStatus.CONFIRMED,
+                List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+                        null,
+                        null,
+                        sourceItem.categoryId(),
+                        sourceItem.description(),
+                        new BigDecimal("5.00"),
+                        sourceItem.unit(),
+                        new BigDecimal("100.00"),
+                        new BigDecimal("500.00"),
+                        sourceItem.id()
+                ))
+        ))).hasMessageContaining("Item '" + sourceItem.description() + "' quantity cannot be reduced below outgoing quantity")
+                .hasMessageContaining("Outgoing quantity: 6.00");
     }
 
     @Test
@@ -608,7 +746,8 @@ class RimBtpApiApplicationTests {
                         null,
                         null,
                         null,
-                        new BigDecimal("100.00")
+                        new BigDecimal("100.00"),
+                        null
                 ))
         ));
 
@@ -652,7 +791,8 @@ class RimBtpApiApplicationTests {
                         null,
                         null,
                         null,
-                        new BigDecimal("75.00")
+                        new BigDecimal("75.00"),
+                        null
                 ))
         ));
 
@@ -712,7 +852,8 @@ class RimBtpApiApplicationTests {
                         quantity,
                         templateItem.unit(),
                         unitPrice,
-                        quantity.multiply(unitPrice)
+                        quantity.multiply(unitPrice),
+                        null
                 ))
         ));
     }
@@ -731,7 +872,16 @@ class RimBtpApiApplicationTests {
                 "Supplier return",
                 null,
                 InvoiceStatus.CONFIRMED,
-                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, quantity, null, null, null))
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, quantity, null, null, null, null))
         ));
+    }
+
+    private Long anotherMaterialCategoryId(Long excludingCategoryId) {
+        return categoryRepository.findAll().stream()
+                .filter(category -> category.getType() == mr.btp.api.category.CategoryType.MATERIAL)
+                .map(mr.btp.api.category.ExpenseCategory::getId)
+                .filter(categoryId -> !categoryId.equals(excludingCategoryId))
+                .findFirst()
+                .orElseThrow();
     }
 }
