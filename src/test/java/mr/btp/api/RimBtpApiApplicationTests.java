@@ -1,5 +1,7 @@
 package mr.btp.api;
 
+import mr.btp.api.category.CategoryDtos;
+import mr.btp.api.category.CategoryService;
 import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.dashboard.DashboardDtos;
 import mr.btp.api.dashboard.DashboardService;
@@ -46,6 +48,9 @@ class RimBtpApiApplicationTests {
     private WorkerService workerService;
 
     @Autowired
+    private CategoryService categoryService;
+
+    @Autowired
     private InvoiceService invoiceService;
 
     @Autowired
@@ -65,6 +70,21 @@ class RimBtpApiApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    @WithMockUser
+    @Transactional
+    void shouldNotDeleteCategoryInUseByExpense() throws Exception {
+        List<CategoryDtos.CategoryResponse> categories = categoryService.list();
+        CategoryDtos.CategoryResponse inUseCategory = categories.stream()
+                .filter(c -> !c.isSystem())
+                .findFirst()
+                .orElseThrow();
+
+        mockMvc.perform(delete("/api/categories/" + inUseCategory.id()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("error.category.in-use"));
+    }
 
     @Test
     @Transactional

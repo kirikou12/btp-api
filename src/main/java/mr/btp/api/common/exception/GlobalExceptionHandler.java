@@ -27,7 +27,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApi(ApiException exception, HttpServletRequest request) {
-        return build(exception.getStatus(), apiMessageSource.resolve(exception), request, Map.of());
+        Map<String, Object> extras = new java.util.HashMap<>();
+        if (exception.getMessageCode() != null) {
+            extras.put("code", exception.getMessageCode());
+        }
+        return build(exception.getStatus(), apiMessageSource.resolve(exception), request, extras);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
