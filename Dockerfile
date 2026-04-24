@@ -22,11 +22,11 @@ RUN groupadd --system spring \
     && chown -R spring:spring /app
 
 ENV SPRING_PROFILES_ACTIVE=prod \
-    SERVER_PORT=8081
+    SERVER_PORT=8080
 
 COPY --from=build /app/target/*.jar /app/app.jar
 
-EXPOSE 8081
+EXPOSE 8080
 
 USER spring:spring
 
