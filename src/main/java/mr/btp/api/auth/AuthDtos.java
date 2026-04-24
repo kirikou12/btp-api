@@ -11,14 +11,17 @@ public final class AuthDtos {
     }
 
     public record RegisterRequest(
-            @NotBlank @Email String email,
-            @NotBlank @Size(min = 8) String password,
-            @NotBlank String fullName,
+            @NotBlank(message = "{validation.email.required}") @Email(message = "{validation.email.invalid}") String email,
+            @NotBlank(message = "{validation.password.required}") @Size(min = 8, message = "{validation.password.min}") String password,
+            @NotBlank(message = "{validation.full-name.required}") String fullName,
             UserRole role
     ) {
     }
 
-    public record LoginRequest(@NotBlank @Email String email, @NotBlank String password) {
+    public record LoginRequest(
+            @NotBlank(message = "{validation.email.required}") @Email(message = "{validation.email.invalid}") String email,
+            @NotBlank(message = "{validation.password.required}") String password
+    ) {
     }
 
     public record AuthResponse(String accessToken, String tokenType, UserResponse user) {

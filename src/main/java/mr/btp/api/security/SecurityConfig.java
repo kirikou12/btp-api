@@ -1,6 +1,5 @@
 package mr.btp.api.security;
 
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,12 +27,18 @@ import java.util.List;
 public class SecurityConfig {
 
     private final List<String> corsAllowedOrigins;
+    private final LocalizedAuthenticationEntryPoint authenticationEntryPoint;
+    private final LocalizedAccessDeniedHandler accessDeniedHandler;
 
-    public SecurityConfig(@Value("${app.security.cors-allowed-origins}") String corsAllowedOrigins) {
+    public SecurityConfig(@Value("${app.security.cors-allowed-origins}") String corsAllowedOrigins,
+                          LocalizedAuthenticationEntryPoint authenticationEntryPoint,
+                          LocalizedAccessDeniedHandler accessDeniedHandler) {
         this.corsAllowedOrigins = Arrays.stream(corsAllowedOrigins.split(","))
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
                 .toList();
+        this.authenticationEntryPoint = authenticationEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
     }
 
     @Bean
@@ -51,9 +56,10 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/h2-console/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(
-                        (request, response, authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED)
-                ))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
@@ -83,7 +89,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(corsAllowedOrigins);
         configuration.setAllowCredentials(false);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "Cache-Control"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Accept-Language", "Origin", "Cache-Control"));
         configuration.setExposedHeaders(List.of("Location"));
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

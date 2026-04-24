@@ -14,18 +14,18 @@ public final class WorkerDtos {
     }
 
     public record WorkerRequest(
-            @NotBlank String name,
-            @NotNull WorkerType type,
+            @NotBlank(message = "{validation.worker.name.required}") String name,
+            @NotNull(message = "{validation.worker.type.required}") WorkerType type,
             Long projectId,
             List<Long> projectIds,
-            @NotNull @DecimalMin("0.00") BigDecimal plannedBudget,
+            @NotNull(message = "{validation.worker.planned-budget.required}") @DecimalMin(value = "0.00", message = "{validation.worker.planned-budget.non-negative}") BigDecimal plannedBudget,
             List<WorkerStageBudgetRequest> stageBudgets
     ) {
     }
 
     public record WorkerStageBudgetRequest(
-            @NotNull Long stageId,
-            @NotNull @DecimalMin("0.00") BigDecimal plannedBudget
+            @NotNull(message = "{validation.worker.stage-id.required}") Long stageId,
+            @NotNull(message = "{validation.worker.stage-budget.required}") @DecimalMin(value = "0.00", message = "{validation.worker.stage-budget.non-negative}") BigDecimal plannedBudget
     ) {
     }
 
@@ -53,11 +53,11 @@ public final class WorkerDtos {
     }
 
     public record WorkerPaymentRequest(
-            @NotNull Long workerId,
-            @NotNull Long projectId,
-            @NotNull Long stageId,
-            @NotNull @DecimalMin("0.00") BigDecimal amount,
-            @NotNull LocalDate paymentDate,
+            @NotNull(message = "{validation.worker-payment.worker.required}") Long workerId,
+            @NotNull(message = "{validation.worker-payment.project.required}") Long projectId,
+            @NotNull(message = "{validation.worker-payment.stage.required}") Long stageId,
+            @NotNull(message = "{validation.worker-payment.amount.required}") @DecimalMin(value = "0.00", message = "{validation.worker-payment.amount.non-negative}") BigDecimal amount,
+            @NotNull(message = "{validation.worker-payment.date.required}") LocalDate paymentDate,
             String documentRef
     ) {
     }

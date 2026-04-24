@@ -1,6 +1,7 @@
 package mr.btp.api.security;
 
 import mr.btp.api.common.exception.ApiException;
+import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,6 +21,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) {
         return userRepository.findByEmailIgnoreCase(username)
                 .map(AppUserDetails::from)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "error.resource.not-found",
+                        "{0} not found",
+                        MessageKey.of("resource.user", "User")
+                ));
     }
 }

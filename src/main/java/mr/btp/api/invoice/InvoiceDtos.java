@@ -21,13 +21,13 @@ public final class InvoiceDtos {
             Long stageId,
             Long sourceSupplyInvoiceId,
             String reference,
-            @NotNull LocalDate invoiceDate,
+            @NotNull(message = "{validation.invoice.date.required}") LocalDate invoiceDate,
             BigDecimal totalAmount,
             String currency,
             String notes,
             String documentRef,
-            @NotNull InvoiceStatus status,
-            @Valid @NotEmpty List<InvoiceItemUpsertRequest> items
+            @NotNull(message = "{validation.invoice.status.required}") InvoiceStatus status,
+            @Valid @NotEmpty(message = "{validation.invoice.items.required}") List<InvoiceItemUpsertRequest> items
     ) {
     }
 
@@ -85,20 +85,20 @@ public final class InvoiceDtos {
     }
 
     public record UsageInvoiceRequest(
-            @NotNull Long sourceSupplyInvoiceId,
-            @NotNull Long projectId,
-            @NotNull Long stageId,
-            @NotNull LocalDate invoiceDate,
+            @NotNull(message = "{validation.usage-invoice.source-supply-invoice.required}") Long sourceSupplyInvoiceId,
+            @NotNull(message = "{validation.usage-invoice.project.required}") Long projectId,
+            @NotNull(message = "{validation.usage-invoice.stage.required}") Long stageId,
+            @NotNull(message = "{validation.invoice.date.required}") LocalDate invoiceDate,
             String notes,
             String documentRef,
-            @NotNull InvoiceStatus status,
-            @Valid @NotEmpty List<UsageInvoiceItemRequest> items
+            @NotNull(message = "{validation.invoice.status.required}") InvoiceStatus status,
+            @Valid @NotEmpty(message = "{validation.invoice.items.required}") List<UsageInvoiceItemRequest> items
     ) {
     }
 
     public record UsageInvoiceItemRequest(
-            @NotNull Long sourceSupplyItemId,
-            @NotNull @DecimalMin("0.00") BigDecimal quantityUsed
+            @NotNull(message = "{validation.usage-invoice.source-item.required}") Long sourceSupplyItemId,
+            @NotNull(message = "{validation.usage-invoice.quantity.required}") @DecimalMin(value = "0.00", message = "{validation.usage-invoice.quantity.non-negative}") BigDecimal quantityUsed
     ) {
     }
 }

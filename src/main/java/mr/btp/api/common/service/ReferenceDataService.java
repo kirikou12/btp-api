@@ -3,6 +3,7 @@ package mr.btp.api.common.service;
 import mr.btp.api.category.ExpenseCategory;
 import mr.btp.api.category.ExpenseCategoryRepository;
 import mr.btp.api.common.exception.ApiException;
+import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
@@ -66,39 +67,39 @@ public class ReferenceDataService {
     }
 
     public User getUser(Long id) {
-        return userRepository.findById(id).orElseThrow(() -> notFound("User"));
+        return userRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.user", "User")));
     }
 
     public Project getProject(Long id) {
-        return projectRepository.findById(id).orElseThrow(() -> notFound("Project"));
+        return projectRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.project", "Project")));
     }
 
     public ConstructionStage getStage(Long id) {
-        return stageRepository.findById(id).orElseThrow(() -> notFound("Stage"));
+        return stageRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.stage", "Stage")));
     }
 
     public ExpenseCategory getCategory(Long id) {
-        return categoryRepository.findById(id).orElseThrow(() -> notFound("Category"));
+        return categoryRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.category", "Category")));
     }
 
     public Supplier getSupplier(Long id) {
-        return supplierRepository.findById(id).orElseThrow(() -> notFound("Supplier"));
+        return supplierRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.supplier", "Supplier")));
     }
 
     public SupplierInvoice getInvoice(Long id) {
-        return invoiceRepository.findById(id).orElseThrow(() -> notFound("Supplier invoice"));
+        return invoiceRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.supplier-invoice", "Supplier invoice")));
     }
 
     public SupplierInvoiceItem getInvoiceItem(Long id) {
-        return invoiceItemRepository.findById(id).orElseThrow(() -> notFound("Supplier invoice item"));
+        return invoiceItemRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.supplier-invoice-item", "Supplier invoice item")));
     }
 
     public Worker getWorker(Long id) {
-        return workerRepository.findById(id).orElseThrow(() -> notFound("Worker"));
+        return workerRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.worker", "Worker")));
     }
 
     public WorkerPayment getWorkerPayment(Long id) {
-        return workerPaymentRepository.findById(id).orElseThrow(() -> notFound("Worker payment"));
+        return workerPaymentRepository.findById(id).orElseThrow(() -> notFound(MessageKey.of("resource.worker-payment", "Worker payment")));
     }
 
     public BigDecimal invoiceItemOutgoingAmount(Long invoiceItemId, Long excludingInvoiceId) {
@@ -174,13 +175,13 @@ public class ReferenceDataService {
 
     public void validateStageDeletion(Long stageId) {
         if (invoiceRepository.countByStageId(stageId) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated invoices");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.stage.delete.has-invoices", "Cannot delete stage: there are associated invoices");
         }
         if (workerPaymentRepository.countByStage_Id(stageId) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated worker payments");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.stage.delete.has-worker-payments", "Cannot delete stage: there are associated worker payments");
         }
         if (workerStageBudgetRepository.countByStageId(stageId) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete stage: there are associated worker budgets");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.stage.delete.has-worker-budgets", "Cannot delete stage: there are associated worker budgets");
         }
     }
 
@@ -190,7 +191,7 @@ public class ReferenceDataService {
         return usageCost.add(workerPayments);
     }
 
-    private ApiException notFound(String resource) {
-        return new ApiException(HttpStatus.NOT_FOUND, resource + " not found");
+    private ApiException notFound(MessageKey resource) {
+        return new ApiException(HttpStatus.NOT_FOUND, "error.resource.not-found", "{0} not found", resource);
     }
 }

@@ -1,6 +1,7 @@
 package mr.btp.api.auth;
 
 import mr.btp.api.common.exception.ApiException;
+import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.security.AppUserDetails;
 import mr.btp.api.security.JwtService;
 import mr.btp.api.user.User;
@@ -32,7 +33,7 @@ public class AuthService {
 
     public AuthDtos.AuthResponse register(AuthDtos.RegisterRequest request) {
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
-            throw new ApiException(HttpStatus.CONFLICT, "Email already exists");
+            throw new ApiException(HttpStatus.CONFLICT, "error.auth.email-already-exists", "Email already exists");
         }
         User user = new User();
         user.setEmail(request.email().trim().toLowerCase());
@@ -48,7 +49,12 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
         );
         User user = userRepository.findByEmailIgnoreCase(request.email())
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "error.resource.not-found",
+                        "{0} not found",
+                        MessageKey.of("resource.user", "User")
+                ));
         return buildResponse(user);
     }
 

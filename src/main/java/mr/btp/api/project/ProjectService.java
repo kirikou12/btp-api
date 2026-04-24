@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import mr.btp.api.common.exception.ApiException;
+import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -70,7 +71,12 @@ public class ProjectService {
 
         String stageName = request.name().trim();
         stageRepository.findByProjectIdAndNameIgnoreCase(projectId, stageName).ifPresent(s -> {
-            throw new ApiException(HttpStatus.CONFLICT, "Stage with name '" + stageName + "' already exists for this project");
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "error.project.stage-name-already-exists",
+                    "Stage with name ''{0}'' already exists for this project",
+                    stageName
+            );
         });
 
         ConstructionStage stage = new ConstructionStage();
@@ -91,7 +97,12 @@ public class ProjectService {
             String newName = request.get("name").asText().trim();
             if (!stage.getName().equalsIgnoreCase(newName)) {
                 stageRepository.findByProjectIdAndNameIgnoreCase(stage.getProject().getId(), newName).ifPresent(s -> {
-                    throw new ApiException(HttpStatus.CONFLICT, "Stage with name '" + newName + "' already exists for this project");
+                    throw new ApiException(
+                            HttpStatus.CONFLICT,
+                            "error.project.stage-name-already-exists",
+                            "Stage with name ''{0}'' already exists for this project",
+                            newName
+                    );
                 });
             }
         }
@@ -124,7 +135,7 @@ public class ProjectService {
         if (hasNonNull(request, "sortOrder")) {
             int sortOrder = readInteger(request, "sortOrder");
             if (sortOrder < 1) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage sort order must be at least 1");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.sort-order.min", "Stage sort order must be at least 1");
             }
             stage.setSortOrder(sortOrder);
         }
@@ -135,7 +146,7 @@ public class ProjectService {
         BigDecimal nextPlannedBudget = readBigDecimal(request, "plannedBudget", stage.getPlannedBudget());
 
         if (nextStartDate != null && nextEndDate != null && nextEndDate.isBefore(nextStartDate)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage end date cannot be before start date");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.end-before-start", "Stage end date cannot be before start date");
         }
         stage.setStatus(nextStatus);
         stage.setStartDate(nextStartDate);
@@ -155,7 +166,7 @@ public class ProjectService {
         if (hasNonNull(request, "progressPercent")) {
             int progressPercent = readInteger(request, "progressPercent");
             if (progressPercent < 0 || progressPercent > 100) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage progress percent must be between 0 and 100");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.progress-percent.range", "Stage progress percent must be between 0 and 100");
             }
             stage.setProgressPercent(progressPercent);
         }
@@ -169,7 +180,7 @@ public class ProjectService {
         try {
             return StageStatus.valueOf(value);
         } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported stage status");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.status.unsupported", "Unsupported stage status");
         }
     }
 
@@ -183,16 +194,38 @@ public class ProjectService {
         try {
             return LocalDate.parse(request.get(field).asText());
         } catch (RuntimeException exception) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage " + field + " must be an ISO date");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "error.project.stage-field.iso-date",
+                    "Stage {0} must be an ISO date",
+                    stageField(field)
+            );
         }
     }
 
     private int readInteger(JsonNode request, String field) {
         JsonNode value = request.get(field);
         if (!value.canConvertToInt()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage " + field + " must be an integer");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "error.project.stage-field.integer",
+                    "Stage {0} must be an integer",
+                    stageField(field)
+            );
         }
         return value.asInt();
+    }
+
+    private MessageKey stageField(String field) {
+        return switch (field) {
+            case "startDate" -> MessageKey.of("field.project-stage.start-date", "start date");
+            case "endDate" -> MessageKey.of("field.project-stage.end-date", "end date");
+            case "progressPercent" -> MessageKey.of("field.project-stage.progress-percent", "progress percent");
+            case "plannedBudget" -> MessageKey.of("field.project-stage.planned-budget", "planned budget");
+            case "sortOrder" -> MessageKey.of("field.project-stage.sort-order", "sort order");
+            case "status" -> MessageKey.of("field.project-stage.status", "status");
+            default -> MessageKey.of("field.project-stage." + field, field);
+        };
     }
 
     private BigDecimal readBigDecimal(JsonNode request, String field, BigDecimal fallback) {
@@ -203,16 +236,16 @@ public class ProjectService {
             return null;
         }
         if (!request.get(field).isNumber()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage planned budget must be numeric");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.planned-budget.numeric", "Stage planned budget must be numeric");
         }
         try {
             BigDecimal value = request.get(field).decimalValue();
             if (value.compareTo(BigDecimal.ZERO) < 0) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage planned budget cannot be negative");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.planned-budget.negative", "Stage planned budget cannot be negative");
             }
             return value;
         } catch (NumberFormatException exception) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage planned budget must be numeric");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.planned-budget.numeric", "Stage planned budget must be numeric");
         }
     }
 

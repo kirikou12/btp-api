@@ -3,6 +3,7 @@ package mr.btp.api.invoice;
 import mr.btp.api.category.CategoryType;
 import mr.btp.api.common.dto.PageResponse;
 import mr.btp.api.common.exception.ApiException;
+import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
 import org.springframework.data.domain.PageRequest;
@@ -77,7 +78,7 @@ public class InvoiceService {
         if (stageId != null) {
             ConstructionStage stage = referenceDataService.getStage(stageId);
             if (!stage.getProject().getId().equals(projectId)) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.stage.project-mismatch", "Stage must belong to the selected project");
             }
             return toResponses(invoiceRepository.findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(projectId, stageId, USAGE_INVOICE_TYPES));
         }
@@ -103,7 +104,7 @@ public class InvoiceService {
     public InvoiceDtos.InvoiceResponse update(Long id, InvoiceDtos.InvoiceRequest request) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
         if (request.invoiceType() != null && invoice.getInvoiceType() != request.invoiceType()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice type cannot be changed");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
         }
         if (invoice.getInvoiceType() == InvoiceType.SUPPLY_USAGE) {
             return updateUsageFromInvoiceRequest(invoice, request);
@@ -112,10 +113,10 @@ public class InvoiceService {
             return updateReturnFromInvoiceRequest(invoice, request);
         }
         if (request.invoiceType() == InvoiceType.SUPPLY_USAGE) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice type cannot be changed");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
         }
         if (request.invoiceType() == InvoiceType.SUPPLY_RETURN) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice type cannot be changed");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
         }
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
@@ -246,7 +247,7 @@ public class InvoiceService {
 
     private SupplierInvoice getUsageSource(InvoiceDtos.InvoiceRequest request) {
         if (request.sourceSupplyInvoiceId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Source supply invoice is required for usage invoices");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-supply.required-for-usage", "Source supply invoice is required for usage invoices");
         }
         SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
         validateSupplySource(source);
@@ -255,7 +256,7 @@ public class InvoiceService {
 
     private SupplierInvoice getReturnSource(InvoiceDtos.InvoiceRequest request) {
         if (request.sourceSupplyInvoiceId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Source supply invoice is required for return invoices");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-supply.required-for-return", "Source supply invoice is required for return invoices");
         }
         SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
         validateSupplySource(source);
@@ -264,10 +265,10 @@ public class InvoiceService {
 
     private ConstructionStage getUsageStage(InvoiceDtos.InvoiceRequest request) {
         if (request.projectId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Project is required for usage invoices");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.project.required-for-usage", "Project is required for usage invoices");
         }
         if (request.stageId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for usage invoices");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.stage.required-for-usage", "Stage is required for usage invoices");
         }
         return validateUsageStage(request.projectId(), request.stageId());
     }
@@ -308,7 +309,7 @@ public class InvoiceService {
         try {
             return InvoiceType.valueOf(type.trim().toUpperCase());
         } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported invoice type");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type.unsupported", "Unsupported invoice type");
         }
     }
 
@@ -318,7 +319,7 @@ public class InvoiceService {
         if (invoice.getInvoiceType() == InvoiceType.SUPPLY) {
             invoiceItemRepository.findByInvoiceId(id).forEach(item -> {
                 if (referenceDataService.invoiceItemOutgoingAmount(item.getId(), null).compareTo(BigDecimal.ZERO) > 0) {
-                    throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete a supply invoice that has recorded outgoing quantities");
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.supply-has-outgoing", "Cannot delete a supply invoice that has recorded outgoing quantities");
                 }
             });
         }
@@ -329,7 +330,7 @@ public class InvoiceService {
     public void deleteUsage(Long id) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
         if (invoice.getInvoiceType() != InvoiceType.SUPPLY_USAGE) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Only supply usage invoices can be deleted here");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.only-supply-usage-here", "Only supply usage invoices can be deleted here");
         }
         invoiceRepository.delete(invoice);
     }
@@ -338,7 +339,7 @@ public class InvoiceService {
     public void deleteReturn(Long id) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
         if (invoice.getInvoiceType() != InvoiceType.SUPPLY_RETURN) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Only supply return invoices can be deleted here");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.only-supply-return-here", "Only supply return invoices can be deleted here");
         }
         invoiceRepository.delete(invoice);
     }
@@ -359,7 +360,7 @@ public class InvoiceService {
         SupplierInvoiceItem item = referenceDataService.getInvoiceItem(id);
         BigDecimal outgoing = referenceDataService.invoiceItemOutgoingAmount(item.getId(), null);
         if (outgoing.compareTo(request.totalAmount()) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Item total cannot be reduced below outgoing amount");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.item.total-update-below-outgoing", "Item total cannot be reduced below outgoing amount");
         }
         applyItem(item, request, item.getInvoice().getInvoiceType());
         SupplierInvoiceItem saved = invoiceItemRepository.save(item);
@@ -373,23 +374,28 @@ public class InvoiceService {
             invoiceType = InvoiceType.SUPPLY;
         }
         if (invoiceType == InvoiceType.SUPPLY_USAGE || invoiceType == InvoiceType.SUPPLY_RETURN) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, invoiceType.name() + " invoices must be handled by the dedicated invoice path");
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "error.invoice.type-dedicated-path",
+                    "{0} invoices must be handled by the dedicated invoice path",
+                    invoiceTypeLabel(invoiceType)
+            );
         }
         if (invoiceType != InvoiceType.DIRECT_EXPENSE && request.supplierId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.supplier.required", "Supplier is required");
         }
         if (request.totalAmount() == null || request.totalAmount().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice total is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.total.required", "Invoice total is required");
         }
         if (request.currency() == null || request.currency().isBlank()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Currency is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.currency.required", "Currency is required");
         }
         if (invoiceType == InvoiceType.DIRECT_USAGE || invoiceType == InvoiceType.DIRECT_EXPENSE) {
             if (request.projectId() == null) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Project is required for direct usage and direct expense invoices");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.project.required-for-direct", "Project is required for direct usage and direct expense invoices");
             }
             if (request.stageId() == null) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Stage is required for direct usage and direct expense invoices");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.stage.required-for-direct", "Stage is required for direct usage and direct expense invoices");
             }
             ConstructionStage stage = validateUsageStage(request.projectId(), request.stageId());
             invoice.setStage(stage);
@@ -412,7 +418,7 @@ public class InvoiceService {
 
     private void replaceItems(SupplierInvoice invoice, List<InvoiceDtos.InvoiceItemUpsertRequest> items) {
         if (items == null || items.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice must contain at least one item");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.items.required", "Invoice must contain at least one item");
         }
         BigDecimal itemSum = BigDecimal.ZERO;
         for (InvoiceDtos.InvoiceItemUpsertRequest item : items) {
@@ -420,7 +426,7 @@ public class InvoiceService {
             itemSum = itemSum.add(item.totalAmount());
         }
         if (itemSum.compareTo(invoice.getTotalAmount()) != 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice total must equal the sum of invoice items");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.total.sum-mismatch", "Invoice total must equal the sum of invoice items");
         }
         items.forEach(request -> {
             SupplierInvoiceItem item = new SupplierInvoiceItem();
@@ -432,7 +438,7 @@ public class InvoiceService {
 
     private void syncSupplyItems(SupplierInvoice invoice, List<InvoiceDtos.InvoiceItemUpsertRequest> requests) {
         if (requests == null || requests.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice must contain at least one item");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.items.required", "Invoice must contain at least one item");
         }
 
         BigDecimal itemSum = BigDecimal.ZERO;
@@ -441,7 +447,7 @@ public class InvoiceService {
             itemSum = itemSum.add(request.totalAmount());
         }
         if (itemSum.compareTo(invoice.getTotalAmount()) != 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice total must equal the sum of invoice items");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.total.sum-mismatch", "Invoice total must equal the sum of invoice items");
         }
 
         List<SupplierInvoiceItem> existingItems = invoiceItemRepository.findByInvoiceId(invoice.getId());
@@ -488,10 +494,10 @@ public class InvoiceService {
             if (request.id() != null) {
                 existingItem = existingById.get(request.id());
                 if (existingItem == null) {
-                    throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice item does not belong to the invoice being updated");
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.item.update.not-in-invoice", "Invoice item does not belong to the invoice being updated");
                 }
                 if (!usedIds.add(existingItem.getId())) {
-                    throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice item cannot be updated more than once");
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.item.update.duplicate", "Invoice item cannot be updated more than once");
                 }
             } else if (!usesExplicitIds && index < existingItems.size()) {
                 existingItem = existingItems.get(index);
@@ -509,21 +515,33 @@ public class InvoiceService {
         if (requestedQuantity.compareTo(outgoing.quantity()) < 0) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Item '" + existingItem.getDescription() + "' quantity cannot be reduced below outgoing quantity. Outgoing quantity: "
-                            + outgoing.quantity().toPlainString()
+                    "error.invoice.item-quantity-below-outgoing",
+                    "Item ''{0}'' quantity cannot be reduced below outgoing quantity. Outgoing quantity: {1}",
+                    existingItem.getDescription(),
+                    outgoing.quantity().toPlainString()
             );
         }
         if (request.totalAmount().compareTo(outgoing.amount()) < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Item total amount cannot be reduced below outgoing amount");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.item.total-below-outgoing", "Item total amount cannot be reduced below outgoing amount");
         }
         if (outgoing.quantity().compareTo(BigDecimal.ZERO) > 0 && request.unitPrice() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Unit price is required when outgoing quantities exist");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-item.unit-price-required", "Unit price is required when outgoing quantities exist");
         }
+    }
+
+    private MessageKey invoiceTypeLabel(InvoiceType invoiceType) {
+        return switch (invoiceType) {
+            case SUPPLY -> MessageKey.of("invoice-type.supply", "supply");
+            case SUPPLY_USAGE -> MessageKey.of("invoice-type.supply-usage", "supply usage");
+            case SUPPLY_RETURN -> MessageKey.of("invoice-type.supply-return", "supply return");
+            case DIRECT_USAGE -> MessageKey.of("invoice-type.direct-usage", "direct usage");
+            case DIRECT_EXPENSE -> MessageKey.of("invoice-type.direct-expense", "direct expense");
+        };
     }
 
     private void validateSupplyItemDeletion(SupplierInvoiceItem item) {
         if (outgoingAmounts(item.getId(), null).quantity().compareTo(BigDecimal.ZERO) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete a supply item that has recorded outgoing quantities");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice-item.delete.supply-has-outgoing", "Cannot delete a supply item that has recorded outgoing quantities");
         }
     }
 
@@ -536,7 +554,7 @@ public class InvoiceService {
             return;
         }
         if (sourceItem.getUnitPrice() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Source SUPPLY item must have unit price when outgoing quantities exist");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-item.unit-price-required", "Source SUPPLY item must have unit price when outgoing quantities exist");
         }
 
         for (SupplierInvoiceItem outgoingItem : outgoingItems) {
@@ -562,7 +580,7 @@ public class InvoiceService {
         validateRegularItemRequest(request);
         CategoryType categoryType = referenceDataService.getCategory(request.categoryId()).getType();
         if (invoiceType != InvoiceType.DIRECT_EXPENSE && categoryType != CategoryType.MATERIAL) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Supplier advance items must use a material category");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.supplier-advance.material-category-required", "Supplier advance items must use a material category");
         }
         item.setCategory(referenceDataService.getCategory(request.categoryId()));
         item.setSourceSupplyItem(null);
@@ -593,13 +611,13 @@ public class InvoiceService {
 
     private void validateRegularItemRequest(InvoiceDtos.InvoiceItemUpsertRequest request) {
         if (request.categoryId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Category is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.category.required", "Category is required");
         }
         if (request.description() == null || request.description().isBlank()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Item description is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.item.description.required", "Item description is required");
         }
         if (request.totalAmount() == null || request.totalAmount().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Item total amount is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.item.total.required", "Item total amount is required");
         }
     }
 
@@ -613,7 +631,7 @@ public class InvoiceService {
                 .map(SupplierInvoiceItemRepository.InvoiceItemTotal::getTotalAmount)
                 .orElse(BigDecimal.ZERO);
         if (sum.compareTo(invoice.getTotalAmount()) != 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invoice total must remain aligned with invoice items");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.total.items-misaligned", "Invoice total must remain aligned with invoice items");
         }
     }
 
@@ -751,14 +769,14 @@ public class InvoiceService {
 
     private void validateSupplySource(SupplierInvoice source) {
         if (source.getInvoiceType() != InvoiceType.SUPPLY) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Source invoice must be a SUPPLY invoice");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-invoice.must-be-supply", "Source invoice must be a SUPPLY invoice");
         }
     }
 
     private ConstructionStage validateUsageStage(Long projectId, Long stageId) {
         ConstructionStage stage = referenceDataService.getStage(stageId);
         if (!stage.getProject().getId().equals(projectId)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.stage.project-mismatch", "Stage must belong to the selected project");
         }
         return stage;
     }
@@ -768,7 +786,7 @@ public class InvoiceService {
                                                       List<InvoiceDtos.InvoiceItemUpsertRequest> requests,
                                                       Long excludingInvoiceId) {
         if (requests == null || requests.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Usage invoice must contain at least one line");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.usage.lines.required", "Usage invoice must contain at least one line");
         }
         requests.forEach(this::validateUsageItemRequest);
 
@@ -780,14 +798,14 @@ public class InvoiceService {
                 .map(request -> {
                     SupplierInvoiceItem sourceItem = sourceItems.get(request.sourceSupplyItemId());
                     if (sourceItem == null || !sourceItem.getInvoice().getId().equals(source.getId())) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Usage line must reference an item from the source SUPPLY invoice");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.usage.line.source-invoice-mismatch", "Usage line must reference an item from the source SUPPLY invoice");
                     }
                     if (sourceItem.getQuantity() == null || sourceItem.getUnitPrice() == null) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Source SUPPLY item must have quantity and unit price");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-item.quantity-unit-price-required", "Source SUPPLY item must have quantity and unit price");
                     }
                     BigDecimal available = availableQuantity(sourceItem, excludingInvoiceId);
                     if (request.quantity().compareTo(available) > 0) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Usage quantity exceeds available supply quantity");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.usage.quantity.exceeds-available", "Usage quantity exceeds available supply quantity");
                     }
                     SupplierInvoiceItem item = new SupplierInvoiceItem();
                     item.setInvoice(usageInvoice);
@@ -802,7 +820,7 @@ public class InvoiceService {
                 })
                 .toList();
         if (usageItems.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Usage invoice must contain at least one positive line");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.usage.lines.positive-required", "Usage invoice must contain at least one positive line");
         }
         return usageItems;
     }
@@ -812,7 +830,7 @@ public class InvoiceService {
                                                        List<InvoiceDtos.InvoiceItemUpsertRequest> requests,
                                                        Long excludingInvoiceId) {
         if (requests == null || requests.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Return invoice must contain at least one line");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.return.lines.required", "Return invoice must contain at least one line");
         }
         requests.forEach(this::validateReturnItemRequest);
 
@@ -824,14 +842,14 @@ public class InvoiceService {
                 .map(request -> {
                     SupplierInvoiceItem sourceItem = sourceItems.get(request.sourceSupplyItemId());
                     if (sourceItem == null || !sourceItem.getInvoice().getId().equals(source.getId())) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Return line must reference an item from the source SUPPLY invoice");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.return.line.source-invoice-mismatch", "Return line must reference an item from the source SUPPLY invoice");
                     }
                     if (sourceItem.getQuantity() == null || sourceItem.getUnitPrice() == null) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Source SUPPLY item must have quantity and unit price");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-item.quantity-unit-price-required", "Source SUPPLY item must have quantity and unit price");
                     }
                     BigDecimal available = availableQuantity(sourceItem, excludingInvoiceId);
                     if (request.quantity().compareTo(available) > 0) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Return quantity exceeds available supply quantity");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.return.quantity.exceeds-available", "Return quantity exceeds available supply quantity");
                     }
                     SupplierInvoiceItem item = new SupplierInvoiceItem();
                     item.setInvoice(returnInvoice);
@@ -846,26 +864,26 @@ public class InvoiceService {
                 })
                 .toList();
         if (returnItems.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Return invoice must contain at least one positive line");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.return.lines.positive-required", "Return invoice must contain at least one positive line");
         }
         return returnItems;
     }
 
     private void validateUsageItemRequest(InvoiceDtos.InvoiceItemUpsertRequest request) {
         if (request.sourceSupplyItemId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Usage line must reference a source supply item");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.usage.line.source-item-required", "Usage line must reference a source supply item");
         }
         if (request.quantity() == null || request.quantity().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Usage quantity is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.usage.quantity.required", "Usage quantity is required");
         }
     }
 
     private void validateReturnItemRequest(InvoiceDtos.InvoiceItemUpsertRequest request) {
         if (request.sourceSupplyItemId() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Return line must reference a source supply item");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.return.line.source-item-required", "Return line must reference a source supply item");
         }
         if (request.quantity() == null || request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Return quantity is required");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.return.quantity.required", "Return quantity is required");
         }
     }
 

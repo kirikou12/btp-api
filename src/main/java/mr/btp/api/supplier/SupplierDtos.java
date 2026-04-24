@@ -7,7 +7,7 @@ public final class SupplierDtos {
     private SupplierDtos() {
     }
 
-    public record SupplierRequest(@NotBlank String name, String phone, String email, String address, String notes) {
+    public record SupplierRequest(@NotBlank(message = "{validation.supplier.name.required}") String name, String phone, String email, String address, String notes) {
     }
 
     public record SupplierResponse(Long id, String name, String phone, String email, String address, String notes) {

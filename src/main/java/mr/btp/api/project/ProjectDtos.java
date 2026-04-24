@@ -16,12 +16,12 @@ public final class ProjectDtos {
     }
 
     public record ProjectRequest(
-            @NotBlank String name,
-            @NotBlank String location,
+            @NotBlank(message = "{validation.project.name.required}") String name,
+            @NotBlank(message = "{validation.project.location.required}") String location,
             String description,
-            @NotNull LocalDate startDate,
-            @NotNull @DecimalMin("0.00") BigDecimal estimatedSalePrice,
-            @NotNull @DecimalMin("0.00") BigDecimal budget,
+            @NotNull(message = "{validation.project.start-date.required}") LocalDate startDate,
+            @NotNull(message = "{validation.project.estimated-sale-price.required}") @DecimalMin(value = "0.00", message = "{validation.project.estimated-sale-price.non-negative}") BigDecimal estimatedSalePrice,
+            @NotNull(message = "{validation.project.budget.required}") @DecimalMin(value = "0.00", message = "{validation.project.budget.non-negative}") BigDecimal budget,
             ProjectStatus status
     ) {
     }
@@ -42,18 +42,18 @@ public final class ProjectDtos {
 
     public record StageRequest(
             String name,
-            @NotNull StageStatus status,
+            @NotNull(message = "{validation.stage.status.required}") StageStatus status,
             LocalDate startDate,
             LocalDate endDate,
-            @DecimalMin("0.00") BigDecimal plannedBudget,
-            @Min(0) @Max(100) Integer progressPercent,
-            @Min(1) Integer sortOrder
+            @DecimalMin(value = "0.00", message = "{validation.stage.planned-budget.non-negative}") BigDecimal plannedBudget,
+            @Min(value = 0, message = "{validation.stage.progress-percent.range}") @Max(value = 100, message = "{validation.stage.progress-percent.range}") Integer progressPercent,
+            @Min(value = 1, message = "{validation.stage.sort-order.min}") Integer sortOrder
     ) {
     }
 
     public record StageCreateRequest(
-            @NotBlank String name,
-            @DecimalMin("0.00") BigDecimal plannedBudget
+            @NotBlank(message = "{validation.stage.name.required}") String name,
+            @DecimalMin(value = "0.00", message = "{validation.stage.planned-budget.non-negative}") BigDecimal plannedBudget
     ) {
     }
 

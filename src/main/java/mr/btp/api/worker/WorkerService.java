@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import mr.btp.api.common.exception.ApiException;
+import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.Project;
@@ -81,10 +82,10 @@ public class WorkerService {
     @Transactional
     public void deleteWorker(Long id) {
         if (!workerRepository.existsById(id)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Worker not found");
+            throw new ApiException(HttpStatus.NOT_FOUND, "error.resource.not-found", "{0} not found", MessageKey.of("resource.worker", "Worker"));
         }
         if (!workerPaymentRepository.findByWorker_IdOrderByPaymentDateDesc(id).isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot delete a worker with payments");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.worker.delete.has-payments", "Cannot delete a worker with payments");
         }
         workerRepository.deleteById(id);
     }
@@ -117,7 +118,7 @@ public class WorkerService {
     @Transactional
     public void deletePayment(Long id) {
         if (!workerPaymentRepository.existsById(id)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "Worker payment not found");
+            throw new ApiException(HttpStatus.NOT_FOUND, "error.resource.not-found", "{0} not found", MessageKey.of("resource.worker-payment", "Worker payment"));
         }
         workerPaymentRepository.deleteById(id);
     }
@@ -175,15 +176,15 @@ public class WorkerService {
                 .filter(item -> item.plannedBudget().compareTo(BigDecimal.ZERO) > 0)
                 .map(item -> {
                     if (!stageIds.add(item.stageId())) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Each stage can have only one worker budget");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.worker-budget.stage-unique", "Each stage can have only one worker budget");
                     }
                     ConstructionStage stage = referenceDataService.getStage(item.stageId());
                     Long stageProjectId = stage.getProject().getId();
                     if (!stageProjectId.equals(budgetProjectId)) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Stage budget must belong to the selected project");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.worker-budget.stage-project-mismatch", "Stage budget must belong to the selected project");
                     }
                     if (worker.getProjects().stream().noneMatch(project -> project.getId().equals(stageProjectId))) {
-                        throw new ApiException(HttpStatus.BAD_REQUEST, "Stage budgets require the worker to be attached to the selected project");
+                        throw new ApiException(HttpStatus.BAD_REQUEST, "error.worker-budget.worker-project-required", "Stage budgets require the worker to be attached to the selected project");
                     }
 
                     WorkerStageBudget stageBudget = new WorkerStageBudget();
@@ -224,12 +225,12 @@ public class WorkerService {
     private void apply(WorkerPayment payment, WorkerDtos.WorkerPaymentRequest request) {
         ConstructionStage stage = referenceDataService.getStage(request.stageId());
         if (!stage.getProject().getId().equals(request.projectId())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Stage must belong to the selected project");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.stage.project-mismatch", "Stage must belong to the selected project");
         }
 
         Worker worker = referenceDataService.getWorker(request.workerId());
         if (worker.getProjects().stream().noneMatch(project -> project.getId().equals(request.projectId()))) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Worker must be attached to the selected project");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.worker.project-required", "Worker must be attached to the selected project");
         }
 
         payment.setWorker(worker);

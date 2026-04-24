@@ -8,7 +8,11 @@ public final class CategoryDtos {
     private CategoryDtos() {
     }
 
-    public record CategoryRequest(@NotBlank String name, @NotNull CategoryType type, Boolean isSystem) {
+    public record CategoryRequest(
+            @NotBlank(message = "{validation.category.name.required}") String name,
+            @NotNull(message = "{validation.category.type.required}") CategoryType type,
+            Boolean isSystem
+    ) {
     }
 
     public record CategoryResponse(Long id, String name, String type, boolean isSystem) {

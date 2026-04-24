@@ -50,7 +50,7 @@ public class SupplierService {
     public void delete(Long id) {
         Supplier supplier = referenceDataService.getSupplier(id);
         if (invoiceRepository.countBySupplier_Id(id) > 0) {
-            throw new ApiException(HttpStatus.CONFLICT, "Supplier is in use");
+            throw new ApiException(HttpStatus.CONFLICT, "error.supplier.in-use", "Supplier is in use");
         }
         supplierRepository.delete(supplier);
     }

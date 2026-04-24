@@ -24,7 +24,7 @@ public class CategoryService {
 
     public CategoryDtos.CategoryResponse create(CategoryDtos.CategoryRequest request) {
         categoryRepository.findByNameIgnoreCase(request.name()).ifPresent(existing -> {
-            throw new ApiException(HttpStatus.CONFLICT, "Category already exists");
+            throw new ApiException(HttpStatus.CONFLICT, "error.category.already-exists", "Category already exists");
         });
         ExpenseCategory category = new ExpenseCategory();
         apply(category, request);
@@ -33,23 +33,23 @@ public class CategoryService {
 
     public CategoryDtos.CategoryResponse update(Long id, CategoryDtos.CategoryRequest request) {
         ExpenseCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Category not found"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "error.resource.not-found", "{0} not found", mr.btp.api.common.i18n.MessageKey.of("resource.category", "Category")));
         apply(category, request);
         return toResponse(categoryRepository.save(category));
     }
 
     public void delete(Long id) {
         ExpenseCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Category not found"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "error.resource.not-found", "{0} not found", mr.btp.api.common.i18n.MessageKey.of("resource.category", "Category")));
 
         if (category.isSystem()) {
-            throw new ApiException(HttpStatus.CONFLICT, "System categories cannot be deleted");
+            throw new ApiException(HttpStatus.CONFLICT, "error.category.system-delete-forbidden", "System categories cannot be deleted");
         }
 
         long supplierInvoiceItemCount = supplierInvoiceItemRepository.countByCategoryId(id);
 
         if (supplierInvoiceItemCount > 0) {
-            throw new ApiException(HttpStatus.CONFLICT, "Category is in use");
+            throw new ApiException(HttpStatus.CONFLICT, "error.category.in-use", "Category is in use");
         }
 
         categoryRepository.delete(category);
