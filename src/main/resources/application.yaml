@@ -38,3 +38,8 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+
+app:
+  project:
+    stage:
+      max-in-progress-per-project: ${APP_PROJECT_STAGE_MAX_IN_PROGRESS_PER_PROJECT:6}

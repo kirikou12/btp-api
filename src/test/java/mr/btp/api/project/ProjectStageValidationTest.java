@@ -7,6 +7,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Transactional
 @WithMockUser
+@TestPropertySource(properties = "app.project.stage.max-in-progress-per-project=2")
 class ProjectStageValidationTest {
 
     @Autowired
@@ -147,6 +149,41 @@ class ProjectStageValidationTest {
         assertThat(updated.getPlannedBudget()).isNull();
     }
 
+    @Test
+    void shouldFailWhenStartingNewStageIfProjectAlreadyHasMaximumInProgressStages() throws Exception {
+        Project project = createProject("Test Project In Progress Limit");
+        createStage(project, "Stage 1", StageStatus.IN_PROGRESS, 1);
+        createStage(project, "Stage 2", StageStatus.IN_PROGRESS, 2);
+        ConstructionStage pendingStage = createStage(project, "Stage 3", StageStatus.NOT_STARTED, 3);
+
+        mockMvc.perform(put("/api/project-stages/" + pendingStage.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"IN_PROGRESS"}
+                        """))
+                .andExpect(status().isBadRequest());
+
+        ConstructionStage reloaded = stageRepository.findById(pendingStage.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(StageStatus.NOT_STARTED);
+    }
+
+    @Test
+    void shouldAllowStartingNewStageIfProjectHasLessThanMaximumInProgressStages() throws Exception {
+        Project project = createProject("Test Project Below In Progress Limit");
+        createStage(project, "Stage 1", StageStatus.IN_PROGRESS, 1);
+        ConstructionStage pendingStage = createStage(project, "Stage 2", StageStatus.NOT_STARTED, 2);
+
+        mockMvc.perform(put("/api/project-stages/" + pendingStage.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"IN_PROGRESS"}
+                        """))
+                .andExpect(status().isOk());
+
+        ConstructionStage reloaded = stageRepository.findById(pendingStage.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(StageStatus.IN_PROGRESS);
+    }
+
     private Project createProject(String name) {
         Project project = new Project();
         project.setName(name);
@@ -159,13 +196,17 @@ class ProjectStageValidationTest {
     }
 
     private ConstructionStage createStage(Project project, String name) {
+        return createStage(project, name, StageStatus.NOT_STARTED, 1);
+    }
+
+    private ConstructionStage createStage(Project project, String name, StageStatus status, int sortOrder) {
         ConstructionStage stage = new ConstructionStage();
         stage.setProject(project);
         stage.setName(name);
-        stage.setStatus(StageStatus.NOT_STARTED);
-        stage.setSortOrder(1);
+        stage.setStatus(status);
+        stage.setSortOrder(sortOrder);
         stage.setPlannedBudget(new BigDecimal("1000"));
-        stage.setProgressPercent(0);
+        stage.setProgressPercent(status == StageStatus.IN_PROGRESS ? 10 : 0);
         return stageRepository.save(stage);
     }
 }

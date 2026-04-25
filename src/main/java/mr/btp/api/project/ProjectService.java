@@ -7,6 +7,7 @@ import java.util.List;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -19,13 +20,16 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final ConstructionStageRepository stageRepository;
     private final ReferenceDataService referenceDataService;
+    private final int maxInProgressStagesPerProject;
 
     public ProjectService(ProjectRepository projectRepository,
                           ConstructionStageRepository stageRepository,
-                          ReferenceDataService referenceDataService) {
+                          ReferenceDataService referenceDataService,
+                          @Value("${app.project.stage.max-in-progress-per-project:6}") int maxInProgressStagesPerProject) {
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
         this.referenceDataService = referenceDataService;
+        this.maxInProgressStagesPerProject = maxInProgressStagesPerProject;
     }
 
     @Transactional(readOnly = true)
@@ -107,6 +111,7 @@ public class ProjectService {
             }
         }
 
+        validateInProgressStageLimit(stage, request);
         apply(stage, request);
         return toStageResponse(stageRepository.save(stage));
     }
@@ -169,6 +174,27 @@ public class ProjectService {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.progress-percent.range", "Stage progress percent must be between 0 and 100");
             }
             stage.setProgressPercent(progressPercent);
+        }
+    }
+
+    private void validateInProgressStageLimit(ConstructionStage stage, JsonNode request) {
+        if (!hasNonNull(request, "status")) {
+            return;
+        }
+
+        StageStatus nextStatus = parseStageStatus(request.get("status").asText());
+        if (stage.getStatus() != StageStatus.NOT_STARTED || nextStatus != StageStatus.IN_PROGRESS) {
+            return;
+        }
+
+        long inProgressStages = stageRepository.countByProjectIdAndStatus(stage.getProject().getId(), StageStatus.IN_PROGRESS);
+        if (inProgressStages >= maxInProgressStagesPerProject) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "error.project.stage.max-in-progress-reached",
+                    "Please complete the stages already in progress before starting a new one. A project cannot have more than {0} stages in progress.",
+                    maxInProgressStagesPerProject
+            );
         }
     }
 
