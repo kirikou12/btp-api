@@ -58,8 +58,17 @@ public final class WorkerDtos {
             @NotNull(message = "{validation.worker-payment.stage.required}") Long stageId,
             @NotNull(message = "{validation.worker-payment.amount.required}") @DecimalMin(value = "0.00", message = "{validation.worker-payment.amount.non-negative}") BigDecimal amount,
             @NotNull(message = "{validation.worker-payment.date.required}") LocalDate paymentDate,
-            String documentRef
+            String documentRef,
+            List<String> documentUrls
     ) {
+        public WorkerPaymentRequest(@NotNull(message = "{validation.worker-payment.worker.required}") Long workerId,
+                                    @NotNull(message = "{validation.worker-payment.project.required}") Long projectId,
+                                    @NotNull(message = "{validation.worker-payment.stage.required}") Long stageId,
+                                    @NotNull(message = "{validation.worker-payment.amount.required}") @DecimalMin(value = "0.00", message = "{validation.worker-payment.amount.non-negative}") BigDecimal amount,
+                                    @NotNull(message = "{validation.worker-payment.date.required}") LocalDate paymentDate,
+                                    String documentRef) {
+            this(workerId, projectId, stageId, amount, paymentDate, documentRef, null);
+        }
     }
 
     public record WorkerPaymentResponse(
@@ -72,7 +81,8 @@ public final class WorkerDtos {
             String stageName,
             BigDecimal amount,
             LocalDate paymentDate,
-            String documentRef
+            String documentRef,
+            List<String> documentUrls
     ) {
     }
 }

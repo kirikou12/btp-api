@@ -56,7 +56,7 @@ docker run --rm -p 8080:8080 \
   btp-api
 ```
 
-Uploaded documents are stored in Cloudinary. The database only keeps the returned Cloudinary URL or a JSON array of URLs when an invoice or worker payment has multiple images.
+Uploaded documents are stored in Cloudinary. Invoice and worker payment image URLs are modeled as ordered child rows and exposed through `documentUrls`; `documentRef` remains in responses for legacy clients.
 
 Required production environment variables:
 
@@ -108,7 +108,7 @@ Actuator is enabled with a minimal public surface:
 
 - `POST /api/uploads/images` accepts a multipart image file named `file`
 - Uploaded files are sent to Cloudinary and the response `path` is the secure Cloudinary URL
-- Saved invoice/payment records keep one URL or a JSON array of URLs in `document_ref`
+- Saved invoice/payment records accept and return image URLs through `documentUrls`
 - `GET /api/uploads/{fileName}` remains available for legacy database-backed uploads created before Cloudinary
 
 ## Core business rules

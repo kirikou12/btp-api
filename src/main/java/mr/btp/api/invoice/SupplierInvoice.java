@@ -1,15 +1,20 @@
 package mr.btp.api.invoice;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import mr.btp.api.common.entity.BaseEntity;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.Project;
@@ -55,6 +60,10 @@ public class SupplierInvoice extends BaseEntity {
 
     @Column(name = "document_ref", columnDefinition = "text")
     private String documentRef;
+
+    @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC")
+    private List<SupplierInvoiceImage> images = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -146,6 +155,14 @@ public class SupplierInvoice extends BaseEntity {
 
     public void setDocumentRef(String documentRef) {
         this.documentRef = documentRef;
+    }
+
+    public List<SupplierInvoiceImage> getImages() {
+        return images;
+    }
+
+    public void setImages(List<SupplierInvoiceImage> images) {
+        this.images = images;
     }
 
     public InvoiceStatus getStatus() {

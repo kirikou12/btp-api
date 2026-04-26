@@ -11,6 +11,7 @@ import java.util.Set;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
+import mr.btp.api.document.DocumentUrlMapper;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.Project;
 import org.springframework.http.HttpStatus;
@@ -237,7 +238,28 @@ public class WorkerService {
         payment.setStage(stage);
         payment.setAmount(request.amount());
         payment.setPaymentDate(request.paymentDate());
-        payment.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
+        applyImages(payment, request.documentUrls(), request.documentRef());
+    }
+
+    private void applyImages(WorkerPayment payment, List<String> documentUrls, String legacyDocumentRef) {
+        List<String> normalizedUrls = DocumentUrlMapper.normalize(documentUrls, legacyDocumentRef);
+        payment.setDocumentRef(DocumentUrlMapper.toLegacyDocumentRef(normalizedUrls));
+        List<WorkerPaymentImage> images = payment.getImages();
+        for (int index = 0; index < normalizedUrls.size(); index++) {
+            WorkerPaymentImage image;
+            if (index < images.size()) {
+                image = images.get(index);
+            } else {
+                image = new WorkerPaymentImage();
+                image.setPayment(payment);
+                images.add(image);
+            }
+            image.setImageUrl(normalizedUrls.get(index));
+            image.setSortOrder(index);
+        }
+        for (int index = images.size() - 1; index >= normalizedUrls.size(); index--) {
+            images.remove(index);
+        }
     }
 
     private WorkerDtos.WorkerResponse toWorkerResponse(Worker worker) {
@@ -312,7 +334,17 @@ public class WorkerService {
                 stage.getName(),
                 payment.getAmount(),
                 payment.getPaymentDate(),
-                payment.getDocumentRef()
+                DocumentUrlMapper.toLegacyDocumentRef(documentUrls(payment)),
+                documentUrls(payment)
         );
+    }
+
+    private List<String> documentUrls(WorkerPayment payment) {
+        if (payment.getImages() == null || payment.getImages().isEmpty()) {
+            return DocumentUrlMapper.normalize(null, payment.getDocumentRef());
+        }
+        return payment.getImages().stream()
+                .map(WorkerPaymentImage::getImageUrl)
+                .toList();
     }
 }

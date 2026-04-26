@@ -690,12 +690,14 @@ class RimBtpApiApplicationTests {
                 completedStage.getId(),
                 new BigDecimal("125.00"),
                 LocalDate.now(),
-                "late-receipt.jpg"
+                null,
+                List.of("late-receipt-front.jpg", "late-receipt-back.jpg")
         ));
 
         assertThat(payment.stageId()).isEqualTo(completedStage.getId());
         assertThat(payment.amount()).isEqualByComparingTo("125.00");
-        assertThat(payment.documentRef()).isEqualTo("late-receipt.jpg");
+        assertThat(payment.documentUrls()).containsExactly("late-receipt-front.jpg", "late-receipt-back.jpg");
+        assertThat(payment.documentRef()).isEqualTo("[\"late-receipt-front.jpg\",\"late-receipt-back.jpg\"]");
     }
 
     @Test
@@ -782,7 +784,8 @@ class RimBtpApiApplicationTests {
                 new BigDecimal("100.00"),
                 "MRU",
                 "Direct material expense",
-                "proof.jpg",
+                null,
+                List.of("proof-front.jpg", "proof-back.jpg"),
                 InvoiceStatus.CONFIRMED,
                 List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
                         null,
@@ -800,7 +803,8 @@ class RimBtpApiApplicationTests {
         assertThat(response.invoiceType()).isEqualTo(InvoiceType.DIRECT_EXPENSE);
         assertThat(response.supplierId()).isNull();
         assertThat(response.invoiceDate()).isEqualTo(LocalDate.now());
-        assertThat(response.documentRef()).isEqualTo("proof.jpg");
+        assertThat(response.documentUrls()).containsExactly("proof-front.jpg", "proof-back.jpg");
+        assertThat(response.documentRef()).isEqualTo("[\"proof-front.jpg\",\"proof-back.jpg\"]");
         assertThat(response.items()).singleElement().satisfies(item -> {
             assertThat(item.quantity()).isEqualByComparingTo(BigDecimal.ONE);
             assertThat(item.unitPrice()).isEqualByComparingTo("100.00");

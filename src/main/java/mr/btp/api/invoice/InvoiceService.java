@@ -5,6 +5,7 @@ import mr.btp.api.common.dto.PageResponse;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
+import mr.btp.api.document.DocumentUrlMapper;
 import mr.btp.api.project.ConstructionStage;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
@@ -152,6 +153,7 @@ public class InvoiceService {
                 null,
                 request.notes(),
                 request.documentRef(),
+                request.documentUrls(),
                 request.status(),
                 request.items().stream()
                         .map(item -> new InvoiceDtos.InvoiceItemUpsertRequest(
@@ -283,7 +285,7 @@ public class InvoiceService {
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setCurrency(source.getCurrency());
         invoice.setNotes(request.notes());
-        invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
+        applyImages(invoice, request.documentUrls(), request.documentRef());
         invoice.setStatus(request.status());
     }
 
@@ -297,7 +299,7 @@ public class InvoiceService {
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setCurrency(source.getCurrency());
         invoice.setNotes(request.notes());
-        invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
+        applyImages(invoice, request.documentUrls(), request.documentRef());
         invoice.setStatus(request.status());
     }
 
@@ -412,8 +414,29 @@ public class InvoiceService {
         invoice.setTotalAmount(request.totalAmount());
         invoice.setCurrency(request.currency().trim().toUpperCase());
         invoice.setNotes(request.notes() == null || request.notes().isBlank() ? generateNotesFromRequests(request.items()) : request.notes().trim());
-        invoice.setDocumentRef(request.documentRef() == null || request.documentRef().isBlank() ? null : request.documentRef().trim());
+        applyImages(invoice, request.documentUrls(), request.documentRef());
         invoice.setStatus(request.status());
+    }
+
+    private void applyImages(SupplierInvoice invoice, List<String> documentUrls, String legacyDocumentRef) {
+        List<String> normalizedUrls = DocumentUrlMapper.normalize(documentUrls, legacyDocumentRef);
+        invoice.setDocumentRef(DocumentUrlMapper.toLegacyDocumentRef(normalizedUrls));
+        List<SupplierInvoiceImage> images = invoice.getImages();
+        for (int index = 0; index < normalizedUrls.size(); index++) {
+            SupplierInvoiceImage image;
+            if (index < images.size()) {
+                image = images.get(index);
+            } else {
+                image = new SupplierInvoiceImage();
+                image.setInvoice(invoice);
+                images.add(image);
+            }
+            image.setImageUrl(normalizedUrls.get(index));
+            image.setSortOrder(index);
+        }
+        for (int index = images.size() - 1; index >= normalizedUrls.size(); index--) {
+            images.remove(index);
+        }
     }
 
     private void replaceItems(SupplierInvoice invoice, List<InvoiceDtos.InvoiceItemUpsertRequest> items) {
@@ -694,12 +717,22 @@ public class InvoiceService {
                 invoice.getTotalAmount(),
                 invoice.getCurrency(),
                 invoice.getNotes(),
-                invoice.getDocumentRef(),
+                DocumentUrlMapper.toLegacyDocumentRef(documentUrls(invoice)),
+                documentUrls(invoice),
                 invoice.getStatus().name(),
                 consumedAmount,
                 invoice.getInvoiceType() == InvoiceType.SUPPLY ? invoice.getTotalAmount().subtract(outgoingAmount) : BigDecimal.ZERO,
                 itemResponses
         );
+    }
+
+    private List<String> documentUrls(SupplierInvoice invoice) {
+        if (invoice.getImages() == null || invoice.getImages().isEmpty()) {
+            return DocumentUrlMapper.normalize(null, invoice.getDocumentRef());
+        }
+        return invoice.getImages().stream()
+                .map(SupplierInvoiceImage::getImageUrl)
+                .toList();
     }
 
     private InvoiceDtos.InvoiceItemResponse toItemResponse(SupplierInvoiceItem item) {
