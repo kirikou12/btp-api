@@ -32,3 +32,4 @@ HELP.md
 # local files
 .env
 *secrets.yaml
+/.env_local

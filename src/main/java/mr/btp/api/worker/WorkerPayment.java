@@ -29,7 +29,7 @@ public class WorkerPayment extends BaseEntity {
     @Column(name = "payment_date", nullable = false)
     private LocalDate paymentDate;
 
-    @Column(name = "document_ref", length = 500)
+    @Column(name = "document_ref", columnDefinition = "text")
     private String documentRef;
 
     public Worker getWorker() {

@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 public class DocumentStorageService {
@@ -18,9 +17,12 @@ public class DocumentStorageService {
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".heic");
 
     private final UploadedDocumentRepository uploadedDocumentRepository;
+    private final DocumentUploadClient documentUploadClient;
 
-    public DocumentStorageService(UploadedDocumentRepository uploadedDocumentRepository) {
+    public DocumentStorageService(UploadedDocumentRepository uploadedDocumentRepository,
+                                  DocumentUploadClient documentUploadClient) {
         this.uploadedDocumentRepository = uploadedDocumentRepository;
+        this.documentUploadClient = documentUploadClient;
     }
 
     public DocumentUploadResponse storeImage(MultipartFile file) {
@@ -35,21 +37,14 @@ public class DocumentStorageService {
 
         String extension = getAllowedExtension(file.getOriginalFilename(), contentType);
         String storedContentType = getStoredContentType(contentType, extension);
-        String fileName = UUID.randomUUID() + extension;
+        String originalFileName = sanitizeOriginalFileName(file.getOriginalFilename());
 
         try {
-            UploadedDocument document = new UploadedDocument();
-            document.setFileName(fileName);
-            document.setOriginalFileName(sanitizeOriginalFileName(file.getOriginalFilename()));
-            document.setContentType(storedContentType);
-            document.setSizeBytes(file.getSize());
-            document.setContent(file.getBytes());
-            uploadedDocumentRepository.save(document);
+            CloudinaryStorageClient.CloudinaryUpload uploaded = documentUploadClient.uploadImage(file.getBytes(), originalFileName, storedContentType);
+            return new DocumentUploadResponse(uploaded.secureUrl(), uploaded.publicId(), storedContentType, uploaded.size() > 0 ? uploaded.size() : file.getSize(), uploaded.publicId());
         } catch (IOException exception) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "error.document.store-failed", "Could not store uploaded image");
         }
-
-        return new DocumentUploadResponse("/api/uploads/" + fileName, fileName, storedContentType, file.getSize());
     }
 
     public StoredDocument load(String fileName) {
@@ -118,7 +113,7 @@ public class DocumentStorageService {
         return Path.of(fileName).getFileName().toString();
     }
 
-    public record DocumentUploadResponse(String path, String fileName, String contentType, long size) {
+    public record DocumentUploadResponse(String path, String fileName, String contentType, long size, String publicId) {
     }
 
     public record StoredDocument(String fileName, String contentType, long size, byte[] content) {

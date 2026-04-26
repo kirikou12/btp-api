@@ -43,3 +43,8 @@ app:
   project:
     stage:
       max-in-progress-per-project: ${APP_PROJECT_STAGE_MAX_IN_PROGRESS_PER_PROJECT:6}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    folder: ${CLOUDINARY_FOLDER:btp/documents}

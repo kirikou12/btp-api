@@ -7,7 +7,7 @@ Spring Boot 3.3 / Java 21 API for tracking BTP projects, supplier invoices, dire
 - JWT auth with register, login, and `me`
 - CRUD endpoints for projects, stage templates, project stages, categories, suppliers, and invoices
 - Business rules for invoice reconciliation and usage/return availability prevention
-- Database-backed image upload endpoint for chantier receipts and supplier invoice photos
+- Cloudinary-backed image upload endpoint for chantier receipts and supplier invoice photos
 - Flyway database migration
 - Demo seed data
 - Swagger UI at `/swagger-ui.html`
@@ -50,10 +50,13 @@ docker run --rm -p 8080:8080 \
   -e DB_PASSWORD=btp \
   -e APP_SECURITY_JWT_SECRET='replace-with-a-long-random-secret' \
   -e APP_SECURITY_CORS_ALLOWED_ORIGINS='https://app.example.com,https://admin.example.com' \
+  -e CLOUDINARY_CLOUD_NAME='your-cloud-name' \
+  -e CLOUDINARY_API_KEY='your-api-key' \
+  -e CLOUDINARY_API_SECRET='your-api-secret' \
   btp-api
 ```
 
-Uploaded documents are stored in PostgreSQL, so they persist with the database and do not depend on a writable container directory.
+Uploaded documents are stored in Cloudinary. The database only keeps the returned Cloudinary URL or a JSON array of URLs when an invoice or worker payment has multiple images.
 
 Required production environment variables:
 
@@ -62,6 +65,9 @@ Required production environment variables:
 - `DB_PASSWORD`
 - `APP_SECURITY_JWT_SECRET`
 - `APP_SECURITY_CORS_ALLOWED_ORIGINS`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
 
 Optional production environment variables:
 
@@ -70,6 +76,7 @@ Optional production environment variables:
 - `DB_POOL_MIN_IDLE`
 - `APP_DOCUMENTS_MAX_FILE_SIZE`
 - `APP_DOCUMENTS_MAX_REQUEST_SIZE`
+- `CLOUDINARY_FOLDER` (defaults to `btp/documents`)
 
 On startup in non-`prod` profiles, the API seeds realistic demo data automatically when the database is empty:
 
@@ -100,8 +107,9 @@ Actuator is enabled with a minimal public surface:
 ## Document uploads
 
 - `POST /api/uploads/images` accepts a multipart image file named `file`
-- Uploaded files are stored in the `uploaded_documents` database table as binary content
-- Saved records keep the returned path such as `/api/uploads/<generated-file-name>`
+- Uploaded files are sent to Cloudinary and the response `path` is the secure Cloudinary URL
+- Saved invoice/payment records keep one URL or a JSON array of URLs in `document_ref`
+- `GET /api/uploads/{fileName}` remains available for legacy database-backed uploads created before Cloudinary
 
 ## Core business rules
 

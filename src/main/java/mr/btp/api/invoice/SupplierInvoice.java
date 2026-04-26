@@ -53,7 +53,7 @@ public class SupplierInvoice extends BaseEntity {
     @Column(columnDefinition = "text")
     private String notes;
 
-    @Column(name = "document_ref", length = 500)
+    @Column(name = "document_ref", columnDefinition = "text")
     private String documentRef;
 
     @Enumerated(EnumType.STRING)

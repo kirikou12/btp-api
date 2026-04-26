@@ -7,4 +7,5 @@ data
 README.md
 *.iml
 .env
+.env_local
 src/main/resources/application-local-secrets.yaml

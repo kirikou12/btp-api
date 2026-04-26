@@ -2,6 +2,8 @@ package mr.btp.api;
 
 import mr.btp.api.category.CategoryDtos;
 import mr.btp.api.category.CategoryService;
+import mr.btp.api.document.CloudinaryStorageClient;
+import mr.btp.api.document.DocumentUploadClient;
 import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.dashboard.DashboardDtos;
 import mr.btp.api.dashboard.DashboardService;
@@ -20,10 +22,12 @@ import mr.btp.api.supplier.SupplierService;
 import mr.btp.api.worker.WorkerDtos;
 import mr.btp.api.worker.WorkerService;
 import mr.btp.api.worker.WorkerType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,9 +36,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -68,8 +76,27 @@ class RimBtpApiApplicationTests {
     @Autowired
     private DocumentStorageService documentStorageService;
 
+    @MockBean
+    private DocumentUploadClient documentUploadClient;
+
     @Autowired
     private MockMvc mockMvc;
+
+    @BeforeEach
+    void mockCloudinaryUploads() {
+        when(documentUploadClient.uploadImage(any(byte[].class), nullable(String.class), nullable(String.class)))
+                .thenAnswer(invocation -> {
+                    byte[] content = invocation.getArgument(0);
+                    String publicId = "btp/documents/" + UUID.randomUUID();
+                    return new CloudinaryStorageClient.CloudinaryUpload(
+                            "https://res.cloudinary.com/demo/image/upload/v1/" + publicId + ".jpg",
+                            publicId,
+                            "image",
+                            "jpg",
+                            content.length
+                    );
+                });
+    }
 
     @Test
     @WithMockUser
@@ -700,7 +727,7 @@ class RimBtpApiApplicationTests {
 
     @Test
     @Transactional
-    void shouldStoreAndLoadUploadedDocument() {
+    void shouldUploadDocumentToCloudinary() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "proof.jpg",
@@ -710,11 +737,10 @@ class RimBtpApiApplicationTests {
 
         DocumentStorageService.DocumentUploadResponse uploaded = documentStorageService.storeImage(file);
 
-        assertThat(uploaded.path()).startsWith("/api/uploads/");
-        DocumentStorageService.StoredDocument storedDocument = documentStorageService.load(uploaded.fileName());
-        assertThat(storedDocument.contentType()).isEqualTo("image/jpeg");
-        assertThat(storedDocument.size()).isEqualTo(4);
-        assertThat(storedDocument.content()).containsExactly(1, 2, 3, 4);
+        assertThat(uploaded.path()).startsWith("https://res.cloudinary.com/");
+        assertThat(uploaded.publicId()).startsWith("btp/documents/");
+        assertThat(uploaded.contentType()).isEqualTo("image/jpeg");
+        assertThat(uploaded.size()).isEqualTo(4);
     }
 
     @Test
