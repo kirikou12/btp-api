@@ -53,6 +53,25 @@ public class CloudinaryStorageClient implements DocumentUploadClient {
         }
     }
 
+    @Override
+    public void deleteImage(String publicId) {
+        if (!hasText(publicId)) {
+            return;
+        }
+        if (!properties.isConfigured()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "error.cloudinary.not-configured", "Cloudinary credentials are not configured");
+        }
+
+        try {
+            cloudinary().uploader().destroy(publicId.trim(), ObjectUtils.asMap(
+                    "resource_type", "image",
+                    "invalidate", true
+            ));
+        } catch (IOException | RuntimeException exception) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "error.document.delete-failed", "Could not delete uploaded image");
+        }
+    }
+
     private synchronized Cloudinary cloudinary() {
         if (cloudinary == null) {
             cloudinary = new Cloudinary(ObjectUtils.asMap(

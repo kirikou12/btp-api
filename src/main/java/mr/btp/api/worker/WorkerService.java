@@ -1,22 +1,30 @@
 package mr.btp.api.worker;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
-import mr.btp.api.document.DocumentUrlMapper;
+import mr.btp.api.document.DocumentDtos;
+import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.project.ConstructionStage;
 import mr.btp.api.project.Project;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class WorkerService {
@@ -25,15 +33,18 @@ public class WorkerService {
     private final WorkerPaymentRepository workerPaymentRepository;
     private final WorkerStageBudgetRepository workerStageBudgetRepository;
     private final ReferenceDataService referenceDataService;
+    private final DocumentStorageService documentStorageService;
 
     public WorkerService(WorkerRepository workerRepository,
                          WorkerPaymentRepository workerPaymentRepository,
                          WorkerStageBudgetRepository workerStageBudgetRepository,
-                         ReferenceDataService referenceDataService) {
+                         ReferenceDataService referenceDataService,
+                         DocumentStorageService documentStorageService) {
         this.workerRepository = workerRepository;
         this.workerPaymentRepository = workerPaymentRepository;
         this.workerStageBudgetRepository = workerStageBudgetRepository;
         this.referenceDataService = referenceDataService;
+        this.documentStorageService = documentStorageService;
     }
 
     @Transactional(readOnly = true)
@@ -104,15 +115,28 @@ public class WorkerService {
 
     @Transactional
     public WorkerDtos.WorkerPaymentResponse createPayment(WorkerDtos.WorkerPaymentRequest request) {
+        return createPayment(request, List.of());
+    }
+
+    @Transactional
+    public WorkerDtos.WorkerPaymentResponse createPayment(WorkerDtos.WorkerPaymentRequest request, List<MultipartFile> documentFiles) {
         WorkerPayment payment = new WorkerPayment();
         apply(payment, request);
-        return toPaymentResponse(workerPaymentRepository.save(payment));
+        WorkerPayment saved = workerPaymentRepository.save(payment);
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toPaymentResponse(workerPaymentRepository.save(saved));
     }
 
     @Transactional
     public WorkerDtos.WorkerPaymentResponse updatePayment(Long id, WorkerDtos.WorkerPaymentRequest request) {
+        return updatePayment(id, request, List.of());
+    }
+
+    @Transactional
+    public WorkerDtos.WorkerPaymentResponse updatePayment(Long id, WorkerDtos.WorkerPaymentRequest request, List<MultipartFile> documentFiles) {
         WorkerPayment payment = referenceDataService.getWorkerPayment(id);
         apply(payment, request);
+        syncImages(payment, request.documentIds(), documentFiles);
         return toPaymentResponse(workerPaymentRepository.save(payment));
     }
 
@@ -121,7 +145,10 @@ public class WorkerService {
         if (!workerPaymentRepository.existsById(id)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "error.resource.not-found", "{0} not found", MessageKey.of("resource.worker-payment", "Worker payment"));
         }
-        workerPaymentRepository.deleteById(id);
+        WorkerPayment payment = referenceDataService.getWorkerPayment(id);
+        List<String> publicIds = imagePublicIds(payment);
+        workerPaymentRepository.delete(payment);
+        registerRemovedDocumentCommitCleanup(publicIds);
     }
 
     private void apply(Worker worker, WorkerDtos.WorkerRequest request) {
@@ -238,28 +265,114 @@ public class WorkerService {
         payment.setStage(stage);
         payment.setAmount(request.amount());
         payment.setPaymentDate(request.paymentDate());
-        applyImages(payment, request.documentUrls(), request.documentRef());
     }
 
-    private void applyImages(WorkerPayment payment, List<String> documentUrls, String legacyDocumentRef) {
-        List<String> normalizedUrls = DocumentUrlMapper.normalize(documentUrls, legacyDocumentRef);
-        payment.setDocumentRef(DocumentUrlMapper.toLegacyDocumentRef(normalizedUrls));
+    private void syncImages(WorkerPayment payment, List<Long> retainedDocumentIds, List<MultipartFile> documentFiles) {
         List<WorkerPaymentImage> images = payment.getImages();
-        for (int index = 0; index < normalizedUrls.size(); index++) {
-            WorkerPaymentImage image;
-            if (index < images.size()) {
-                image = images.get(index);
-            } else {
-                image = new WorkerPaymentImage();
-                image.setPayment(payment);
-                images.add(image);
+        Map<Long, WorkerPaymentImage> existingById = images.stream()
+                .filter(image -> image.getId() != null)
+                .collect(Collectors.toMap(WorkerPaymentImage::getId, Function.identity()));
+        List<Long> retainedIds = retainedDocumentIds == null
+                ? images.stream().map(WorkerPaymentImage::getId).filter(Objects::nonNull).toList()
+                : retainedDocumentIds.stream().filter(Objects::nonNull).distinct().toList();
+
+        for (Long documentId : retainedIds) {
+            if (!existingById.containsKey(documentId)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.document.not-attached", "Document is not attached to this record");
             }
-            image.setImageUrl(normalizedUrls.get(index));
-            image.setSortOrder(index);
         }
-        for (int index = images.size() - 1; index >= normalizedUrls.size(); index--) {
-            images.remove(index);
+
+        Set<Long> retainedIdSet = new HashSet<>(retainedIds);
+        List<String> removedPublicIds = images.stream()
+                .filter(image -> image.getId() != null && !retainedIdSet.contains(image.getId()))
+                .map(WorkerPaymentImage::getPublicId)
+                .filter(publicId -> publicId != null && !publicId.isBlank())
+                .toList();
+        List<DocumentStorageService.DocumentUploadResponse> uploadedDocuments = new ArrayList<>();
+
+        try {
+            uploadedDocuments = documentStorageService.storeImages(documentFiles);
+            registerUploadedDocumentRollbackCleanup(uploadedDocuments.stream()
+                    .map(DocumentStorageService.DocumentUploadResponse::publicId)
+                    .toList());
+
+            List<WorkerPaymentImage> nextImages = new ArrayList<>();
+            for (Long retainedId : retainedIds) {
+                WorkerPaymentImage image = existingById.get(retainedId);
+                image.setSortOrder(nextImages.size());
+                nextImages.add(image);
+            }
+            for (DocumentStorageService.DocumentUploadResponse uploadedDocument : uploadedDocuments) {
+                WorkerPaymentImage image = new WorkerPaymentImage();
+                image.setPayment(payment);
+                image.setImageUrl(uploadedDocument.path());
+                image.setPublicId(uploadedDocument.publicId());
+                image.setOriginalFileName(uploadedDocument.originalFileName());
+                image.setContentType(uploadedDocument.contentType());
+                image.setSizeBytes(uploadedDocument.size());
+                image.setSortOrder(nextImages.size());
+                nextImages.add(image);
+            }
+
+            images.clear();
+            images.addAll(nextImages);
+            registerRemovedDocumentCommitCleanup(removedPublicIds);
+        } catch (RuntimeException exception) {
+            documentStorageService.deleteImagesQuietly(uploadedDocuments.stream()
+                    .map(DocumentStorageService.DocumentUploadResponse::publicId)
+                    .toList());
+            throw exception;
         }
+    }
+
+    private void registerUploadedDocumentRollbackCleanup(List<String> publicIds) {
+        List<String> cleanPublicIds = cleanPublicIds(publicIds);
+        if (cleanPublicIds.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    documentStorageService.deleteImagesQuietly(cleanPublicIds);
+                }
+            }
+        });
+    }
+
+    private void registerRemovedDocumentCommitCleanup(List<String> publicIds) {
+        List<String> cleanPublicIds = cleanPublicIds(publicIds);
+        if (cleanPublicIds.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            documentStorageService.deleteImagesQuietly(cleanPublicIds);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                documentStorageService.deleteImagesQuietly(cleanPublicIds);
+            }
+        });
+    }
+
+    private List<String> cleanPublicIds(List<String> publicIds) {
+        return (publicIds == null ? List.<String>of() : publicIds).stream()
+                .filter(publicId -> publicId != null && !publicId.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private List<String> imagePublicIds(WorkerPayment payment) {
+        return (payment.getImages() == null ? List.<WorkerPaymentImage>of() : payment.getImages()).stream()
+                .map(WorkerPaymentImage::getPublicId)
+                .toList();
     }
 
     private WorkerDtos.WorkerResponse toWorkerResponse(Worker worker) {
@@ -334,17 +447,21 @@ public class WorkerService {
                 stage.getName(),
                 payment.getAmount(),
                 payment.getPaymentDate(),
-                DocumentUrlMapper.toLegacyDocumentRef(documentUrls(payment)),
-                documentUrls(payment)
+                documents(payment)
         );
     }
 
-    private List<String> documentUrls(WorkerPayment payment) {
-        if (payment.getImages() == null || payment.getImages().isEmpty()) {
-            return DocumentUrlMapper.normalize(null, payment.getDocumentRef());
-        }
-        return payment.getImages().stream()
-                .map(WorkerPaymentImage::getImageUrl)
+    private List<DocumentDtos.DocumentAttachmentResponse> documents(WorkerPayment payment) {
+        return (payment.getImages() == null ? List.<WorkerPaymentImage>of() : payment.getImages()).stream()
+                .map(image -> new DocumentDtos.DocumentAttachmentResponse(
+                        image.getId(),
+                        image.getImageUrl(),
+                        image.getPublicId(),
+                        image.getOriginalFileName(),
+                        image.getContentType(),
+                        image.getSizeBytes(),
+                        image.getSortOrder()
+                ))
                 .toList();
     }
 }

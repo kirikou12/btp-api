@@ -19,6 +19,18 @@ public class SupplierInvoiceImage extends BaseEntity {
     @Column(name = "image_url", nullable = false, columnDefinition = "text")
     private String imageUrl;
 
+    @Column(name = "public_id", columnDefinition = "text")
+    private String publicId;
+
+    @Column(name = "original_file_name")
+    private String originalFileName;
+
+    @Column(name = "content_type", length = 100)
+    private String contentType;
+
+    @Column(name = "size_bytes")
+    private Long sizeBytes;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
@@ -36,6 +48,38 @@ public class SupplierInvoiceImage extends BaseEntity {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getPublicId() {
+        return publicId;
+    }
+
+    public void setPublicId(String publicId) {
+        this.publicId = publicId;
+    }
+
+    public String getOriginalFileName() {
+        return originalFileName;
+    }
+
+    public void setOriginalFileName(String originalFileName) {
+        this.originalFileName = originalFileName;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
+
+    public Long getSizeBytes() {
+        return sizeBytes;
+    }
+
+    public void setSizeBytes(Long sizeBytes) {
+        this.sizeBytes = sizeBytes;
     }
 
     public int getSortOrder() {

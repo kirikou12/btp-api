@@ -684,20 +684,26 @@ class RimBtpApiApplicationTests {
                 .findFirst()
                 .orElseThrow();
 
-        WorkerDtos.WorkerPaymentResponse payment = workerService.createPayment(new WorkerDtos.WorkerPaymentRequest(
-                worker.id(),
-                completedStage.getProject().getId(),
-                completedStage.getId(),
-                new BigDecimal("125.00"),
-                LocalDate.now(),
-                null,
-                List.of("late-receipt-front.jpg", "late-receipt-back.jpg")
-        ));
+        WorkerDtos.WorkerPaymentResponse payment = workerService.createPayment(
+                new WorkerDtos.WorkerPaymentRequest(
+                        worker.id(),
+                        completedStage.getProject().getId(),
+                        completedStage.getId(),
+                        new BigDecimal("125.00"),
+                        LocalDate.now(),
+                        null
+                ),
+                List.of(
+                        new MockMultipartFile("documents", "late-receipt-front.jpg", "image/jpeg", new byte[]{1, 2}),
+                        new MockMultipartFile("documents", "late-receipt-back.jpg", "image/jpeg", new byte[]{3, 4})
+                )
+        );
 
         assertThat(payment.stageId()).isEqualTo(completedStage.getId());
         assertThat(payment.amount()).isEqualByComparingTo("125.00");
-        assertThat(payment.documentUrls()).containsExactly("late-receipt-front.jpg", "late-receipt-back.jpg");
-        assertThat(payment.documentRef()).isEqualTo("[\"late-receipt-front.jpg\",\"late-receipt-back.jpg\"]");
+        assertThat(payment.documents()).hasSize(2);
+        assertThat(payment.documents()).extracting(mr.btp.api.document.DocumentDtos.DocumentAttachmentResponse::originalFileName)
+                .containsExactly("late-receipt-front.jpg", "late-receipt-back.jpg");
     }
 
     @Test
@@ -719,7 +725,9 @@ class RimBtpApiApplicationTests {
                         existingPayment.stageId(),
                         new BigDecimal("2100.00"),
                         existingPayment.paymentDate(),
-                        existingPayment.documentRef()
+                        existingPayment.documents().stream()
+                                .map(mr.btp.api.document.DocumentDtos.DocumentAttachmentResponse::id)
+                                .toList()
                 )
         );
 
@@ -773,38 +781,44 @@ class RimBtpApiApplicationTests {
                 .filter(c -> c.getType() == mr.btp.api.category.CategoryType.MATERIAL)
                 .findFirst().orElseThrow();
 
-        InvoiceDtos.InvoiceResponse response = invoiceService.create(new InvoiceDtos.InvoiceRequest(
-                InvoiceType.DIRECT_EXPENSE,
-                null,
-                project.getId(),
-                stage.getId(),
-                null,
-                "DIRECT-TEST",
-                LocalDate.now(),
-                new BigDecimal("100.00"),
-                "MRU",
-                "Direct material expense",
-                null,
-                List.of("proof-front.jpg", "proof-back.jpg"),
-                InvoiceStatus.CONFIRMED,
-                List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+        InvoiceDtos.InvoiceResponse response = invoiceService.create(
+                new InvoiceDtos.InvoiceRequest(
+                        InvoiceType.DIRECT_EXPENSE,
                         null,
+                        project.getId(),
+                        stage.getId(),
                         null,
-                        category.getId(),
+                        "DIRECT-TEST",
+                        LocalDate.now(),
+                        new BigDecimal("100.00"),
+                        "MRU",
                         "Direct material expense",
                         null,
-                        null,
-                        null,
-                        new BigDecimal("100.00"),
-                        null
-                ))
-        ));
+                        InvoiceStatus.CONFIRMED,
+                        List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+                                null,
+                                null,
+                                category.getId(),
+                                "Direct material expense",
+                                null,
+                                null,
+                                null,
+                                new BigDecimal("100.00"),
+                                null
+                        ))
+                ),
+                List.of(
+                        new MockMultipartFile("documents", "proof-front.jpg", "image/jpeg", new byte[]{1, 2}),
+                        new MockMultipartFile("documents", "proof-back.jpg", "image/jpeg", new byte[]{3, 4})
+                )
+        );
 
         assertThat(response.invoiceType()).isEqualTo(InvoiceType.DIRECT_EXPENSE);
         assertThat(response.supplierId()).isNull();
         assertThat(response.invoiceDate()).isEqualTo(LocalDate.now());
-        assertThat(response.documentUrls()).containsExactly("proof-front.jpg", "proof-back.jpg");
-        assertThat(response.documentRef()).isEqualTo("[\"proof-front.jpg\",\"proof-back.jpg\"]");
+        assertThat(response.documents()).hasSize(2);
+        assertThat(response.documents()).extracting(mr.btp.api.document.DocumentDtos.DocumentAttachmentResponse::originalFileName)
+                .containsExactly("proof-front.jpg", "proof-back.jpg");
         assertThat(response.items()).singleElement().satisfies(item -> {
             assertThat(item.quantity()).isEqualByComparingTo(BigDecimal.ONE);
             assertThat(item.unitPrice()).isEqualByComparingTo("100.00");
@@ -831,7 +845,7 @@ class RimBtpApiApplicationTests {
                 new BigDecimal("75.00"),
                 "MRU",
                 "Late direct expense",
-                "late-direct-expense.jpg",
+                null,
                 InvoiceStatus.CONFIRMED,
                 List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
                         null,

@@ -5,13 +5,17 @@ import mr.btp.api.common.dto.PageResponse;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
-import mr.btp.api.document.DocumentUrlMapper;
+import mr.btp.api.document.DocumentDtos;
+import mr.btp.api.document.DocumentStorageService;
 import mr.btp.api.project.ConstructionStage;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -20,6 +24,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -32,13 +37,16 @@ public class InvoiceService {
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
     private final ReferenceDataService referenceDataService;
+    private final DocumentStorageService documentStorageService;
 
     public InvoiceService(SupplierInvoiceRepository invoiceRepository,
                           SupplierInvoiceItemRepository invoiceItemRepository,
-                          ReferenceDataService referenceDataService) {
+                          ReferenceDataService referenceDataService,
+                          DocumentStorageService documentStorageService) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceItemRepository = invoiceItemRepository;
         this.referenceDataService = referenceDataService;
+        this.documentStorageService = documentStorageService;
     }
 
     @Transactional(readOnly = true)
@@ -88,30 +96,41 @@ public class InvoiceService {
 
     @Transactional
     public InvoiceDtos.InvoiceResponse create(InvoiceDtos.InvoiceRequest request) {
+        return create(request, List.of());
+    }
+
+    @Transactional
+    public InvoiceDtos.InvoiceResponse create(InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         if (request.invoiceType() == InvoiceType.SUPPLY_USAGE) {
-            return createUsageFromInvoiceRequest(request);
+            return createUsageFromInvoiceRequest(request, documentFiles);
         }
         if (request.invoiceType() == InvoiceType.SUPPLY_RETURN) {
-            return createReturnFromInvoiceRequest(request);
+            return createReturnFromInvoiceRequest(request, documentFiles);
         }
         SupplierInvoice invoice = new SupplierInvoice();
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
         replaceItems(invoice, request.items());
-        return toResponse(invoice);
+        syncImages(invoice, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(invoice));
     }
 
     @Transactional
     public InvoiceDtos.InvoiceResponse update(Long id, InvoiceDtos.InvoiceRequest request) {
+        return update(id, request, List.of());
+    }
+
+    @Transactional
+    public InvoiceDtos.InvoiceResponse update(Long id, InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice invoice = referenceDataService.getInvoice(id);
         if (request.invoiceType() != null && invoice.getInvoiceType() != request.invoiceType()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
         }
         if (invoice.getInvoiceType() == InvoiceType.SUPPLY_USAGE) {
-            return updateUsageFromInvoiceRequest(invoice, request);
+            return updateUsageFromInvoiceRequest(invoice, request, documentFiles);
         }
         if (invoice.getInvoiceType() == InvoiceType.SUPPLY_RETURN) {
-            return updateReturnFromInvoiceRequest(invoice, request);
+            return updateReturnFromInvoiceRequest(invoice, request, documentFiles);
         }
         if (request.invoiceType() == InvoiceType.SUPPLY_USAGE) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
@@ -127,17 +146,28 @@ public class InvoiceService {
             invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(id));
             replaceItems(invoice, request.items());
         }
-        return toResponse(invoice);
+        syncImages(invoice, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(invoice));
     }
 
     @Transactional
     public InvoiceDtos.InvoiceResponse createUsage(InvoiceDtos.UsageInvoiceRequest request) {
-        return create(toInvoiceRequest(request));
+        return createUsage(request, List.of());
+    }
+
+    @Transactional
+    public InvoiceDtos.InvoiceResponse createUsage(InvoiceDtos.UsageInvoiceRequest request, List<MultipartFile> documentFiles) {
+        return create(toInvoiceRequest(request), documentFiles);
     }
 
     @Transactional
     public InvoiceDtos.InvoiceResponse updateUsage(Long id, InvoiceDtos.UsageInvoiceRequest request) {
-        return update(id, toInvoiceRequest(request));
+        return updateUsage(id, request, List.of());
+    }
+
+    @Transactional
+    public InvoiceDtos.InvoiceResponse updateUsage(Long id, InvoiceDtos.UsageInvoiceRequest request, List<MultipartFile> documentFiles) {
+        return update(id, toInvoiceRequest(request), documentFiles);
     }
 
     private InvoiceDtos.InvoiceRequest toInvoiceRequest(InvoiceDtos.UsageInvoiceRequest request) {
@@ -152,8 +182,7 @@ public class InvoiceService {
                 null,
                 null,
                 request.notes(),
-                request.documentRef(),
-                request.documentUrls(),
+                request.documentIds(),
                 request.status(),
                 request.items().stream()
                         .map(item -> new InvoiceDtos.InvoiceItemUpsertRequest(
@@ -171,7 +200,7 @@ public class InvoiceService {
         );
     }
 
-    private InvoiceDtos.InvoiceResponse createUsageFromInvoiceRequest(InvoiceDtos.InvoiceRequest request) {
+    private InvoiceDtos.InvoiceResponse createUsageFromInvoiceRequest(InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice source = getUsageSource(request);
         ConstructionStage stage = getUsageStage(request);
 
@@ -188,10 +217,11 @@ public class InvoiceService {
             item.setInvoice(saved);
             invoiceItemRepository.save(item);
         });
-        return toResponse(saved);
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(saved));
     }
 
-    private InvoiceDtos.InvoiceResponse updateUsageFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request) {
+    private InvoiceDtos.InvoiceResponse updateUsageFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice source = getUsageSource(request);
         ConstructionStage stage = getUsageStage(request);
 
@@ -207,10 +237,11 @@ public class InvoiceService {
             item.setInvoice(saved);
             invoiceItemRepository.save(item);
         });
-        return toResponse(saved);
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(saved));
     }
 
-    private InvoiceDtos.InvoiceResponse createReturnFromInvoiceRequest(InvoiceDtos.InvoiceRequest request) {
+    private InvoiceDtos.InvoiceResponse createReturnFromInvoiceRequest(InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice source = getReturnSource(request);
 
         SupplierInvoice invoice = new SupplierInvoice();
@@ -226,10 +257,11 @@ public class InvoiceService {
             item.setInvoice(saved);
             invoiceItemRepository.save(item);
         });
-        return toResponse(saved);
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(saved));
     }
 
-    private InvoiceDtos.InvoiceResponse updateReturnFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request) {
+    private InvoiceDtos.InvoiceResponse updateReturnFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice source = getReturnSource(request);
 
         List<SupplierInvoiceItem> returnItems = buildReturnItems(invoice, source, request.items(), invoice.getId());
@@ -244,7 +276,8 @@ public class InvoiceService {
             item.setInvoice(saved);
             invoiceItemRepository.save(item);
         });
-        return toResponse(saved);
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(saved));
     }
 
     private SupplierInvoice getUsageSource(InvoiceDtos.InvoiceRequest request) {
@@ -285,7 +318,6 @@ public class InvoiceService {
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setCurrency(source.getCurrency());
         invoice.setNotes(request.notes());
-        applyImages(invoice, request.documentUrls(), request.documentRef());
         invoice.setStatus(request.status());
     }
 
@@ -299,7 +331,6 @@ public class InvoiceService {
         invoice.setInvoiceDate(request.invoiceDate());
         invoice.setCurrency(source.getCurrency());
         invoice.setNotes(request.notes());
-        applyImages(invoice, request.documentUrls(), request.documentRef());
         invoice.setStatus(request.status());
     }
 
@@ -325,7 +356,9 @@ public class InvoiceService {
                 }
             });
         }
+        List<String> publicIds = imagePublicIds(invoice);
         invoiceRepository.delete(invoice);
+        registerRemovedDocumentCommitCleanup(publicIds);
     }
 
     @Transactional
@@ -334,7 +367,9 @@ public class InvoiceService {
         if (invoice.getInvoiceType() != InvoiceType.SUPPLY_USAGE) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.only-supply-usage-here", "Only supply usage invoices can be deleted here");
         }
+        List<String> publicIds = imagePublicIds(invoice);
         invoiceRepository.delete(invoice);
+        registerRemovedDocumentCommitCleanup(publicIds);
     }
 
     @Transactional
@@ -343,7 +378,9 @@ public class InvoiceService {
         if (invoice.getInvoiceType() != InvoiceType.SUPPLY_RETURN) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.only-supply-return-here", "Only supply return invoices can be deleted here");
         }
+        List<String> publicIds = imagePublicIds(invoice);
         invoiceRepository.delete(invoice);
+        registerRemovedDocumentCommitCleanup(publicIds);
     }
 
     @Transactional
@@ -414,29 +451,115 @@ public class InvoiceService {
         invoice.setTotalAmount(request.totalAmount());
         invoice.setCurrency(request.currency().trim().toUpperCase());
         invoice.setNotes(request.notes() == null || request.notes().isBlank() ? generateNotesFromRequests(request.items()) : request.notes().trim());
-        applyImages(invoice, request.documentUrls(), request.documentRef());
         invoice.setStatus(request.status());
     }
 
-    private void applyImages(SupplierInvoice invoice, List<String> documentUrls, String legacyDocumentRef) {
-        List<String> normalizedUrls = DocumentUrlMapper.normalize(documentUrls, legacyDocumentRef);
-        invoice.setDocumentRef(DocumentUrlMapper.toLegacyDocumentRef(normalizedUrls));
+    private void syncImages(SupplierInvoice invoice, List<Long> retainedDocumentIds, List<MultipartFile> documentFiles) {
         List<SupplierInvoiceImage> images = invoice.getImages();
-        for (int index = 0; index < normalizedUrls.size(); index++) {
-            SupplierInvoiceImage image;
-            if (index < images.size()) {
-                image = images.get(index);
-            } else {
-                image = new SupplierInvoiceImage();
-                image.setInvoice(invoice);
-                images.add(image);
+        Map<Long, SupplierInvoiceImage> existingById = images.stream()
+                .filter(image -> image.getId() != null)
+                .collect(Collectors.toMap(SupplierInvoiceImage::getId, Function.identity()));
+        List<Long> retainedIds = retainedDocumentIds == null
+                ? images.stream().map(SupplierInvoiceImage::getId).filter(Objects::nonNull).toList()
+                : retainedDocumentIds.stream().filter(Objects::nonNull).distinct().toList();
+
+        for (Long documentId : retainedIds) {
+            if (!existingById.containsKey(documentId)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.document.not-attached", "Document is not attached to this record");
             }
-            image.setImageUrl(normalizedUrls.get(index));
-            image.setSortOrder(index);
         }
-        for (int index = images.size() - 1; index >= normalizedUrls.size(); index--) {
-            images.remove(index);
+
+        Set<Long> retainedIdSet = new HashSet<>(retainedIds);
+        List<String> removedPublicIds = images.stream()
+                .filter(image -> image.getId() != null && !retainedIdSet.contains(image.getId()))
+                .map(SupplierInvoiceImage::getPublicId)
+                .filter(publicId -> publicId != null && !publicId.isBlank())
+                .toList();
+        List<DocumentStorageService.DocumentUploadResponse> uploadedDocuments = new ArrayList<>();
+
+        try {
+            uploadedDocuments = documentStorageService.storeImages(documentFiles);
+            registerUploadedDocumentRollbackCleanup(uploadedDocuments.stream()
+                    .map(DocumentStorageService.DocumentUploadResponse::publicId)
+                    .toList());
+
+            List<SupplierInvoiceImage> nextImages = new ArrayList<>();
+            for (Long retainedId : retainedIds) {
+                SupplierInvoiceImage image = existingById.get(retainedId);
+                image.setSortOrder(nextImages.size());
+                nextImages.add(image);
+            }
+            for (DocumentStorageService.DocumentUploadResponse uploadedDocument : uploadedDocuments) {
+                SupplierInvoiceImage image = new SupplierInvoiceImage();
+                image.setInvoice(invoice);
+                image.setImageUrl(uploadedDocument.path());
+                image.setPublicId(uploadedDocument.publicId());
+                image.setOriginalFileName(uploadedDocument.originalFileName());
+                image.setContentType(uploadedDocument.contentType());
+                image.setSizeBytes(uploadedDocument.size());
+                image.setSortOrder(nextImages.size());
+                nextImages.add(image);
+            }
+
+            images.clear();
+            images.addAll(nextImages);
+            registerRemovedDocumentCommitCleanup(removedPublicIds);
+        } catch (RuntimeException exception) {
+            documentStorageService.deleteImagesQuietly(uploadedDocuments.stream()
+                    .map(DocumentStorageService.DocumentUploadResponse::publicId)
+                    .toList());
+            throw exception;
         }
+    }
+
+    private void registerUploadedDocumentRollbackCleanup(List<String> publicIds) {
+        List<String> cleanPublicIds = cleanPublicIds(publicIds);
+        if (cleanPublicIds.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    documentStorageService.deleteImagesQuietly(cleanPublicIds);
+                }
+            }
+        });
+    }
+
+    private void registerRemovedDocumentCommitCleanup(List<String> publicIds) {
+        List<String> cleanPublicIds = cleanPublicIds(publicIds);
+        if (cleanPublicIds.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            documentStorageService.deleteImagesQuietly(cleanPublicIds);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                documentStorageService.deleteImagesQuietly(cleanPublicIds);
+            }
+        });
+    }
+
+    private List<String> cleanPublicIds(List<String> publicIds) {
+        return (publicIds == null ? List.<String>of() : publicIds).stream()
+                .filter(publicId -> publicId != null && !publicId.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private List<String> imagePublicIds(SupplierInvoice invoice) {
+        return (invoice.getImages() == null ? List.<SupplierInvoiceImage>of() : invoice.getImages()).stream()
+                .map(SupplierInvoiceImage::getPublicId)
+                .toList();
     }
 
     private void replaceItems(SupplierInvoice invoice, List<InvoiceDtos.InvoiceItemUpsertRequest> items) {
@@ -717,8 +840,7 @@ public class InvoiceService {
                 invoice.getTotalAmount(),
                 invoice.getCurrency(),
                 invoice.getNotes(),
-                DocumentUrlMapper.toLegacyDocumentRef(documentUrls(invoice)),
-                documentUrls(invoice),
+                documents(invoice),
                 invoice.getStatus().name(),
                 consumedAmount,
                 invoice.getInvoiceType() == InvoiceType.SUPPLY ? invoice.getTotalAmount().subtract(outgoingAmount) : BigDecimal.ZERO,
@@ -726,12 +848,17 @@ public class InvoiceService {
         );
     }
 
-    private List<String> documentUrls(SupplierInvoice invoice) {
-        if (invoice.getImages() == null || invoice.getImages().isEmpty()) {
-            return DocumentUrlMapper.normalize(null, invoice.getDocumentRef());
-        }
-        return invoice.getImages().stream()
-                .map(SupplierInvoiceImage::getImageUrl)
+    private List<DocumentDtos.DocumentAttachmentResponse> documents(SupplierInvoice invoice) {
+        return (invoice.getImages() == null ? List.<SupplierInvoiceImage>of() : invoice.getImages()).stream()
+                .map(image -> new DocumentDtos.DocumentAttachmentResponse(
+                        image.getId(),
+                        image.getImageUrl(),
+                        image.getPublicId(),
+                        image.getOriginalFileName(),
+                        image.getContentType(),
+                        image.getSizeBytes(),
+                        image.getSortOrder()
+                ))
                 .toList();
     }
 

@@ -8,6 +8,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -41,9 +44,42 @@ public class DocumentStorageService {
 
         try {
             CloudinaryStorageClient.CloudinaryUpload uploaded = documentUploadClient.uploadImage(file.getBytes(), originalFileName, storedContentType);
-            return new DocumentUploadResponse(uploaded.secureUrl(), uploaded.publicId(), storedContentType, uploaded.size() > 0 ? uploaded.size() : file.getSize(), uploaded.publicId());
+            return new DocumentUploadResponse(uploaded.secureUrl(), uploaded.publicId(), storedContentType, uploaded.size() > 0 ? uploaded.size() : file.getSize(), uploaded.publicId(), originalFileName);
         } catch (IOException exception) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "error.document.store-failed", "Could not store uploaded image");
+        }
+    }
+
+    public List<DocumentUploadResponse> storeImages(List<MultipartFile> files) {
+        List<DocumentUploadResponse> uploadedDocuments = new ArrayList<>();
+        try {
+            for (MultipartFile file : files == null ? List.<MultipartFile>of() : files) {
+                if (file != null && !file.isEmpty()) {
+                    uploadedDocuments.add(storeImage(file));
+                }
+            }
+            return uploadedDocuments;
+        } catch (RuntimeException exception) {
+            deleteImagesQuietly(uploadedDocuments.stream()
+                    .map(DocumentUploadResponse::publicId)
+                    .toList());
+            throw exception;
+        }
+    }
+
+    public void deleteImage(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
+            return;
+        }
+        documentUploadClient.deleteImage(publicId);
+    }
+
+    public void deleteImagesQuietly(Collection<String> publicIds) {
+        for (String publicId : publicIds == null ? List.<String>of() : publicIds) {
+            try {
+                deleteImage(publicId);
+            } catch (RuntimeException ignored) {
+            }
         }
     }
 
@@ -113,7 +149,7 @@ public class DocumentStorageService {
         return Path.of(fileName).getFileName().toString();
     }
 
-    public record DocumentUploadResponse(String path, String fileName, String contentType, long size, String publicId) {
+    public record DocumentUploadResponse(String path, String fileName, String contentType, long size, String publicId, String originalFileName) {
     }
 
     public record StoredDocument(String fileName, String contentType, long size, byte[] content) {

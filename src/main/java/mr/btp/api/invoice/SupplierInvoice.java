@@ -58,9 +58,6 @@ public class SupplierInvoice extends BaseEntity {
     @Column(columnDefinition = "text")
     private String notes;
 
-    @Column(name = "document_ref", columnDefinition = "text")
-    private String documentRef;
-
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC")
     private List<SupplierInvoiceImage> images = new ArrayList<>();
@@ -147,14 +144,6 @@ public class SupplierInvoice extends BaseEntity {
 
     public void setNotes(String notes) {
         this.notes = notes;
-    }
-
-    public String getDocumentRef() {
-        return documentRef;
-    }
-
-    public void setDocumentRef(String documentRef) {
-        this.documentRef = documentRef;
     }
 
     public List<SupplierInvoiceImage> getImages() {

@@ -34,9 +34,6 @@ public class WorkerPayment extends BaseEntity {
     @Column(name = "payment_date", nullable = false)
     private LocalDate paymentDate;
 
-    @Column(name = "document_ref", columnDefinition = "text")
-    private String documentRef;
-
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC")
     private List<WorkerPaymentImage> images = new ArrayList<>();
@@ -71,14 +68,6 @@ public class WorkerPayment extends BaseEntity {
 
     public void setPaymentDate(LocalDate paymentDate) {
         this.paymentDate = paymentDate;
-    }
-
-    public String getDocumentRef() {
-        return documentRef;
-    }
-
-    public void setDocumentRef(String documentRef) {
-        this.documentRef = documentRef;
     }
 
     public List<WorkerPaymentImage> getImages() {
