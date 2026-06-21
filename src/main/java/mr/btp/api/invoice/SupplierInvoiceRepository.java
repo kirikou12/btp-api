@@ -1,5 +1,6 @@
 package mr.btp.api.invoice;
 
+import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,16 @@ public interface SupplierInvoiceRepository extends JpaRepository<SupplierInvoice
     List<SupplierInvoice> findByProjectIdAndStageIdAndInvoiceTypeInOrderByInvoiceDateDescIdDesc(Long projectId, Long stageId, List<InvoiceType> invoiceTypes);
     long countByStageId(Long stageId);
     long countBySupplier_Id(Long supplierId);
+
+    @Query("""
+            select coalesce(sum(invoice.totalAmount), 0)
+            from SupplierInvoice invoice
+            where invoice.sourceSupplyInvoice.id = :sourceInvoiceId
+              and invoice.invoiceType = mr.btp.api.invoice.InvoiceType.SUPPLY_EXCHANGE
+              and (:excludingInvoiceId is null or invoice.id <> :excludingInvoiceId)
+            """)
+    BigDecimal sumExchangeTotalBySourceInvoiceId(@Param("sourceInvoiceId") Long sourceInvoiceId,
+                                                 @Param("excludingInvoiceId") Long excludingInvoiceId);
 
     @Query(value = """
             select invoice

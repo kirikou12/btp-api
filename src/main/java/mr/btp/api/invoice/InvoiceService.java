@@ -107,6 +107,9 @@ public class InvoiceService {
         if (request.invoiceType() == InvoiceType.SUPPLY_RETURN) {
             return createReturnFromInvoiceRequest(request, documentFiles);
         }
+        if (request.invoiceType() == InvoiceType.SUPPLY_EXCHANGE) {
+            return createExchangeFromInvoiceRequest(request, documentFiles);
+        }
         SupplierInvoice invoice = new SupplierInvoice();
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
@@ -132,16 +135,23 @@ public class InvoiceService {
         if (invoice.getInvoiceType() == InvoiceType.SUPPLY_RETURN) {
             return updateReturnFromInvoiceRequest(invoice, request, documentFiles);
         }
+        if (invoice.getInvoiceType() == InvoiceType.SUPPLY_EXCHANGE) {
+            return updateExchangeFromInvoiceRequest(invoice, request, documentFiles);
+        }
         if (request.invoiceType() == InvoiceType.SUPPLY_USAGE) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
         }
         if (request.invoiceType() == InvoiceType.SUPPLY_RETURN) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
         }
+        if (request.invoiceType() == InvoiceType.SUPPLY_EXCHANGE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.type-immutable", "Invoice type cannot be changed");
+        }
         apply(invoice, request);
         invoice = invoiceRepository.save(invoice);
         if (invoice.getInvoiceType() == InvoiceType.SUPPLY) {
             syncSupplyItems(invoice, request.items());
+            validateSupplyInvoiceTotalCoversDebits(invoice);
         } else {
             invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(id));
             replaceItems(invoice, request.items());
@@ -280,6 +290,32 @@ public class InvoiceService {
         return toResponse(invoiceRepository.save(saved));
     }
 
+    private InvoiceDtos.InvoiceResponse createExchangeFromInvoiceRequest(InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
+        SupplierInvoice source = getExchangeSource(request);
+
+        SupplierInvoice invoice = new SupplierInvoice();
+        applyExchangeInvoice(invoice, request, source);
+        validateExchangeBalance(source, invoice.getTotalAmount(), null);
+
+        SupplierInvoice saved = invoiceRepository.save(invoice);
+        replaceItems(saved, request.items());
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(saved));
+    }
+
+    private InvoiceDtos.InvoiceResponse updateExchangeFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
+        SupplierInvoice source = getExchangeSource(request);
+
+        applyExchangeInvoice(invoice, request, source);
+        validateExchangeBalance(source, invoice.getTotalAmount(), invoice.getId());
+        invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(invoice.getId()));
+
+        SupplierInvoice saved = invoiceRepository.save(invoice);
+        replaceItems(saved, request.items());
+        syncImages(saved, request.documentIds(), documentFiles);
+        return toResponse(invoiceRepository.save(saved));
+    }
+
     private SupplierInvoice getUsageSource(InvoiceDtos.InvoiceRequest request) {
         if (request.sourceSupplyInvoiceId() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-supply.required-for-usage", "Source supply invoice is required for usage invoices");
@@ -292,6 +328,15 @@ public class InvoiceService {
     private SupplierInvoice getReturnSource(InvoiceDtos.InvoiceRequest request) {
         if (request.sourceSupplyInvoiceId() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-supply.required-for-return", "Source supply invoice is required for return invoices");
+        }
+        SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
+        validateSupplySource(source);
+        return source;
+    }
+
+    private SupplierInvoice getExchangeSource(InvoiceDtos.InvoiceRequest request) {
+        if (request.sourceSupplyInvoiceId() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-supply.required-for-exchange", "Source supply invoice is required for exchange invoices");
         }
         SupplierInvoice source = referenceDataService.getInvoice(request.sourceSupplyInvoiceId());
         validateSupplySource(source);
@@ -334,6 +379,23 @@ public class InvoiceService {
         invoice.setStatus(request.status());
     }
 
+    private void applyExchangeInvoice(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, SupplierInvoice source) {
+        if (request.totalAmount() == null || request.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.exchange.total.required", "Exchange invoice total must be greater than zero");
+        }
+        invoice.setInvoiceType(InvoiceType.SUPPLY_EXCHANGE);
+        invoice.setSupplier(source.getSupplier());
+        invoice.setProject(null);
+        invoice.setStage(null);
+        invoice.setSourceSupplyInvoice(source);
+        invoice.setReference(request.reference());
+        invoice.setInvoiceDate(request.invoiceDate());
+        invoice.setTotalAmount(request.totalAmount());
+        invoice.setCurrency(source.getCurrency());
+        invoice.setNotes(request.notes() == null || request.notes().isBlank() ? generateNotesFromRequests(request.items()) : request.notes().trim());
+        invoice.setStatus(request.status());
+    }
+
     private InvoiceType parseInvoiceTypeFilter(String type) {
         if (type == null || type.isBlank() || "ALL".equalsIgnoreCase(type)) {
             return null;
@@ -355,6 +417,9 @@ public class InvoiceService {
                     throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.supply-has-outgoing", "Cannot delete a supply invoice that has recorded outgoing quantities");
                 }
             });
+            if (invoiceRepository.sumExchangeTotalBySourceInvoiceId(id, null).compareTo(BigDecimal.ZERO) > 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.delete.supply-has-outgoing", "Cannot delete a supply invoice that has recorded outgoing quantities");
+            }
         }
         List<String> publicIds = imagePublicIds(invoice);
         invoiceRepository.delete(invoice);
@@ -412,7 +477,7 @@ public class InvoiceService {
         if (invoiceType == null) {
             invoiceType = InvoiceType.SUPPLY;
         }
-        if (invoiceType == InvoiceType.SUPPLY_USAGE || invoiceType == InvoiceType.SUPPLY_RETURN) {
+        if (invoiceType == InvoiceType.SUPPLY_USAGE || invoiceType == InvoiceType.SUPPLY_RETURN || invoiceType == InvoiceType.SUPPLY_EXCHANGE) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST,
                     "error.invoice.type-dedicated-path",
@@ -680,6 +745,7 @@ public class InvoiceService {
             case SUPPLY -> MessageKey.of("invoice-type.supply", "supply");
             case SUPPLY_USAGE -> MessageKey.of("invoice-type.supply-usage", "supply usage");
             case SUPPLY_RETURN -> MessageKey.of("invoice-type.supply-return", "supply return");
+            case SUPPLY_EXCHANGE -> MessageKey.of("invoice-type.supply-exchange", "supply exchange");
             case DIRECT_USAGE -> MessageKey.of("invoice-type.direct-usage", "direct usage");
             case DIRECT_EXPENSE -> MessageKey.of("invoice-type.direct-expense", "direct expense");
         };
@@ -930,6 +996,23 @@ public class InvoiceService {
     private void validateSupplySource(SupplierInvoice source) {
         if (source.getInvoiceType() != InvoiceType.SUPPLY) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.source-invoice.must-be-supply", "Source invoice must be a SUPPLY invoice");
+        }
+    }
+
+    private void validateExchangeBalance(SupplierInvoice source, BigDecimal requestedAmount, Long excludingExchangeInvoiceId) {
+        BigDecimal sourceDebits = referenceDataService.invoiceOutgoingAmount(source.getId())
+                .add(invoiceRepository.sumExchangeTotalBySourceInvoiceId(source.getId(), excludingExchangeInvoiceId));
+        BigDecimal available = source.getTotalAmount().subtract(sourceDebits);
+        if (requestedAmount.compareTo(available) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.exchange.amount.exceeds-available", "Exchange amount exceeds available source supply invoice balance");
+        }
+    }
+
+    private void validateSupplyInvoiceTotalCoversDebits(SupplierInvoice source) {
+        BigDecimal sourceDebits = referenceDataService.invoiceOutgoingAmount(source.getId())
+                .add(invoiceRepository.sumExchangeTotalBySourceInvoiceId(source.getId(), null));
+        if (source.getTotalAmount().compareTo(sourceDebits) < 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.total-below-outgoing", "Invoice total cannot be reduced below outgoing amount");
         }
     }
 

@@ -3,6 +3,7 @@ package mr.btp.api.dashboard;
 import mr.btp.api.category.CategoryType;
 import mr.btp.api.common.service.ReferenceDataService;
 import mr.btp.api.invoice.InvoiceType;
+import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.invoice.SupplierInvoiceRepository;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
@@ -136,11 +137,10 @@ public class DashboardService {
     }
 
     private BigDecimal remainingSupplierAmount(Long projectId) {
-        List<Long> supplyInvoiceIds = (projectId == null
+        List<SupplierInvoice> supplyInvoices = (projectId == null
                 ? invoiceRepository.findByInvoiceTypeOrderByInvoiceDateDesc(InvoiceType.SUPPLY)
-                : referenceDataService.invoicesByProject(projectId)).stream()
-                .map(invoice -> invoice.getId())
-                .toList();
+                : referenceDataService.invoicesByProject(projectId));
+        List<Long> supplyInvoiceIds = supplyInvoices.stream().map(invoice -> invoice.getId()).toList();
         if (supplyInvoiceIds.isEmpty()) {
             return BigDecimal.ZERO;
         }
@@ -154,9 +154,13 @@ public class DashboardService {
                         SupplierInvoiceItemRepository.SourceItemUsageTotal::getSourceSupplyItemId,
                         SupplierInvoiceItemRepository.SourceItemUsageTotal::getTotalAmount
                 ));
-        return supplyItems.stream()
+        BigDecimal remainingByItems = supplyItems.stream()
                 .map(item -> item.getTotalAmount().subtract(outgoingBySourceItem.getOrDefault(item.getId(), BigDecimal.ZERO)))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal exchanged = supplyInvoices.stream()
+                .map(invoice -> invoiceRepository.sumExchangeTotalBySourceInvoiceId(invoice.getId(), null))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return remainingByItems.subtract(exchanged).max(BigDecimal.ZERO);
     }
 
     private record CostBreakdown(BigDecimal direct, BigDecimal materials, BigDecimal workers) {

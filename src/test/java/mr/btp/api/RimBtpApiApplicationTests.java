@@ -243,6 +243,40 @@ class RimBtpApiApplicationTests {
 
     @Test
     @Transactional
+    void shouldCreateSupplyExchangeWithReplacementMaterialLines() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        Long replacementCategoryId = anotherMaterialCategoryId(supply.items().getFirst().categoryId());
+
+        InvoiceDtos.InvoiceResponse exchange = createExchange(supply, replacementCategoryId, new BigDecimal("250.00"));
+
+        assertThat(exchange.invoiceType()).isEqualTo(InvoiceType.SUPPLY_EXCHANGE);
+        assertThat(exchange.sourceSupplyInvoiceId()).isEqualTo(supply.id());
+        assertThat(exchange.supplierId()).isEqualTo(supply.supplierId());
+        assertThat(exchange.projectId()).isNull();
+        assertThat(exchange.stageId()).isNull();
+        assertThat(exchange.totalAmount()).isEqualByComparingTo("250.00");
+        assertThat(exchange.items()).hasSize(1);
+        assertThat(exchange.items().getFirst().sourceSupplyItemId()).isNull();
+        assertThat(exchange.items().getFirst().categoryId()).isEqualTo(replacementCategoryId);
+        assertThat(invoiceService.list(0, 50, "SUPPLY_EXCHANGE").content())
+                .extracting(InvoiceDtos.InvoiceResponse::id)
+                .contains(exchange.id());
+    }
+
+    @Test
+    @Transactional
+    void shouldRejectSupplyExchangeAboveAvailableSourceBalance() {
+        InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
+        Long replacementCategoryId = anotherMaterialCategoryId(supply.items().getFirst().categoryId());
+
+        createExchange(supply, replacementCategoryId, new BigDecimal("250.00"));
+
+        assertThatThrownBy(() -> createExchange(supply, replacementCategoryId, new BigDecimal("750.01")))
+                .hasMessageContaining("Exchange amount exceeds available source supply invoice balance");
+    }
+
+    @Test
+    @Transactional
     void shouldPreventUsageOfReturnedQuantities() {
         InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
         InvoiceDtos.InvoiceItemResponse sourceItem = supply.items().getFirst();
@@ -937,6 +971,34 @@ class RimBtpApiApplicationTests {
                 null,
                 InvoiceStatus.CONFIRMED,
                 java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(null, sourceItem.id(), null, null, quantity, null, null, null, null))
+        ));
+    }
+
+    private InvoiceDtos.InvoiceResponse createExchange(InvoiceDtos.InvoiceResponse supply, Long replacementCategoryId, BigDecimal totalAmount) {
+        return invoiceService.create(new InvoiceDtos.InvoiceRequest(
+                InvoiceType.SUPPLY_EXCHANGE,
+                supply.supplierId(),
+                null,
+                null,
+                supply.id(),
+                "EXCHANGE-" + System.nanoTime(),
+                LocalDate.now(),
+                totalAmount,
+                supply.currency(),
+                "Supplier exchange",
+                null,
+                InvoiceStatus.CONFIRMED,
+                java.util.List.of(new InvoiceDtos.InvoiceItemUpsertRequest(
+                        null,
+                        null,
+                        replacementCategoryId,
+                        "Replacement material",
+                        BigDecimal.ONE,
+                        "unit",
+                        totalAmount,
+                        totalAmount,
+                        null
+                ))
         ));
     }
 

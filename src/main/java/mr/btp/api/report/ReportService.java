@@ -5,6 +5,7 @@ import mr.btp.api.invoice.InvoiceType;
 import mr.btp.api.invoice.SupplierInvoice;
 import mr.btp.api.invoice.SupplierInvoiceItem;
 import mr.btp.api.invoice.SupplierInvoiceItemRepository;
+import mr.btp.api.invoice.SupplierInvoiceRepository;
 import mr.btp.api.worker.WorkerPayment;
 import mr.btp.api.worker.WorkerPaymentRepository;
 import org.springframework.stereotype.Service;
@@ -24,13 +25,16 @@ public class ReportService {
 
     private final ReferenceDataService referenceDataService;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
+    private final SupplierInvoiceRepository invoiceRepository;
     private final WorkerPaymentRepository workerPaymentRepository;
 
     public ReportService(ReferenceDataService referenceDataService,
                          SupplierInvoiceItemRepository invoiceItemRepository,
+                         SupplierInvoiceRepository invoiceRepository,
                          WorkerPaymentRepository workerPaymentRepository) {
         this.referenceDataService = referenceDataService;
         this.invoiceItemRepository = invoiceItemRepository;
+        this.invoiceRepository = invoiceRepository;
         this.workerPaymentRepository = workerPaymentRepository;
     }
 
@@ -86,9 +90,10 @@ public class ReportService {
             BigDecimal outgoing = invoiceItems.stream()
                     .map(item -> outgoingBySourceItem.getOrDefault(item.getId(), BigDecimal.ZERO))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal exchanged = invoiceRepository.sumExchangeTotalBySourceInvoiceId(invoice.getId(), null);
             rows.merge(
                     invoice.getSupplier().getId(),
-                    new ReportDtos.SupplierBalanceRow(invoice.getSupplier().getId(), invoice.getSupplier().getName(), invoice.getTotalAmount(), consumed, invoice.getTotalAmount().subtract(outgoing)),
+                    new ReportDtos.SupplierBalanceRow(invoice.getSupplier().getId(), invoice.getSupplier().getName(), invoice.getTotalAmount(), consumed, invoice.getTotalAmount().subtract(outgoing).subtract(exchanged)),
                     (left, right) -> new ReportDtos.SupplierBalanceRow(
                             left.supplierId(),
                             left.supplierName(),
