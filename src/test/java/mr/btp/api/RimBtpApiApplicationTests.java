@@ -246,19 +246,23 @@ class RimBtpApiApplicationTests {
     void shouldCreateSupplyExchangeWithReplacementMaterialLines() {
         InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
         Long replacementCategoryId = anotherMaterialCategoryId(supply.items().getFirst().categoryId());
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
 
-        InvoiceDtos.InvoiceResponse exchange = createExchange(supply, replacementCategoryId, new BigDecimal("250.00"));
+        InvoiceDtos.InvoiceResponse exchange = createExchange(supply, replacementCategoryId, activeStage, new BigDecimal("250.00"));
 
         assertThat(exchange.invoiceType()).isEqualTo(InvoiceType.SUPPLY_EXCHANGE);
         assertThat(exchange.sourceSupplyInvoiceId()).isEqualTo(supply.id());
         assertThat(exchange.supplierId()).isEqualTo(supply.supplierId());
-        assertThat(exchange.projectId()).isNull();
-        assertThat(exchange.stageId()).isNull();
+        assertThat(exchange.projectId()).isEqualTo(supply.projectId());
+        assertThat(exchange.stageId()).isEqualTo(activeStage.getId());
         assertThat(exchange.totalAmount()).isEqualByComparingTo("250.00");
         assertThat(exchange.items()).hasSize(1);
         assertThat(exchange.items().getFirst().sourceSupplyItemId()).isNull();
         assertThat(exchange.items().getFirst().categoryId()).isEqualTo(replacementCategoryId);
         assertThat(invoiceService.list(0, 50, "SUPPLY_EXCHANGE").content())
+                .extracting(InvoiceDtos.InvoiceResponse::id)
+                .contains(exchange.id());
+        assertThat(invoiceService.usageInvoicesByProject(supply.projectId(), activeStage.getId()))
                 .extracting(InvoiceDtos.InvoiceResponse::id)
                 .contains(exchange.id());
     }
@@ -268,10 +272,11 @@ class RimBtpApiApplicationTests {
     void shouldRejectSupplyExchangeAboveAvailableSourceBalance() {
         InvoiceDtos.InvoiceResponse supply = createTestSupply(new BigDecimal("10.00"));
         Long replacementCategoryId = anotherMaterialCategoryId(supply.items().getFirst().categoryId());
+        ConstructionStage activeStage = activeStageForProject(supply.projectId());
 
-        createExchange(supply, replacementCategoryId, new BigDecimal("250.00"));
+        createExchange(supply, replacementCategoryId, activeStage, new BigDecimal("250.00"));
 
-        assertThatThrownBy(() -> createExchange(supply, replacementCategoryId, new BigDecimal("750.01")))
+        assertThatThrownBy(() -> createExchange(supply, replacementCategoryId, activeStage, new BigDecimal("750.01")))
                 .hasMessageContaining("Exchange amount exceeds available source supply invoice balance");
     }
 
@@ -974,12 +979,12 @@ class RimBtpApiApplicationTests {
         ));
     }
 
-    private InvoiceDtos.InvoiceResponse createExchange(InvoiceDtos.InvoiceResponse supply, Long replacementCategoryId, BigDecimal totalAmount) {
+    private InvoiceDtos.InvoiceResponse createExchange(InvoiceDtos.InvoiceResponse supply, Long replacementCategoryId, ConstructionStage stage, BigDecimal totalAmount) {
         return invoiceService.create(new InvoiceDtos.InvoiceRequest(
                 InvoiceType.SUPPLY_EXCHANGE,
                 supply.supplierId(),
-                null,
-                null,
+                supply.projectId(),
+                stage.getId(),
                 supply.id(),
                 "EXCHANGE-" + System.nanoTime(),
                 LocalDate.now(),

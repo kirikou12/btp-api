@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @Service
 public class InvoiceService {
 
-    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_EXCHANGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
 
     private final SupplierInvoiceRepository invoiceRepository;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
@@ -292,9 +292,10 @@ public class InvoiceService {
 
     private InvoiceDtos.InvoiceResponse createExchangeFromInvoiceRequest(InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice source = getExchangeSource(request);
+        ConstructionStage stage = getExchangeStage(request);
 
         SupplierInvoice invoice = new SupplierInvoice();
-        applyExchangeInvoice(invoice, request, source);
+        applyExchangeInvoice(invoice, request, source, stage);
         validateExchangeBalance(source, invoice.getTotalAmount(), null);
 
         SupplierInvoice saved = invoiceRepository.save(invoice);
@@ -305,8 +306,9 @@ public class InvoiceService {
 
     private InvoiceDtos.InvoiceResponse updateExchangeFromInvoiceRequest(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, List<MultipartFile> documentFiles) {
         SupplierInvoice source = getExchangeSource(request);
+        ConstructionStage stage = getExchangeStage(request);
 
-        applyExchangeInvoice(invoice, request, source);
+        applyExchangeInvoice(invoice, request, source, stage);
         validateExchangeBalance(source, invoice.getTotalAmount(), invoice.getId());
         invoiceItemRepository.deleteAll(invoiceItemRepository.findByInvoiceId(invoice.getId()));
 
@@ -353,6 +355,16 @@ public class InvoiceService {
         return validateUsageStage(request.projectId(), request.stageId());
     }
 
+    private ConstructionStage getExchangeStage(InvoiceDtos.InvoiceRequest request) {
+        if (request.projectId() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.project.required-for-exchange", "Project is required for exchange invoices");
+        }
+        if (request.stageId() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.stage.required-for-exchange", "Stage is required for exchange invoices");
+        }
+        return validateUsageStage(request.projectId(), request.stageId());
+    }
+
     private void applyUsageInvoice(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, SupplierInvoice source, ConstructionStage stage) {
         invoice.setInvoiceType(InvoiceType.SUPPLY_USAGE);
         invoice.setSupplier(source.getSupplier());
@@ -379,14 +391,14 @@ public class InvoiceService {
         invoice.setStatus(request.status());
     }
 
-    private void applyExchangeInvoice(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, SupplierInvoice source) {
+    private void applyExchangeInvoice(SupplierInvoice invoice, InvoiceDtos.InvoiceRequest request, SupplierInvoice source, ConstructionStage stage) {
         if (request.totalAmount() == null || request.totalAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "error.invoice.exchange.total.required", "Exchange invoice total must be greater than zero");
         }
         invoice.setInvoiceType(InvoiceType.SUPPLY_EXCHANGE);
         invoice.setSupplier(source.getSupplier());
-        invoice.setProject(null);
-        invoice.setStage(null);
+        invoice.setProject(stage.getProject());
+        invoice.setStage(stage);
         invoice.setSourceSupplyInvoice(source);
         invoice.setReference(request.reference());
         invoice.setInvoiceDate(request.invoiceDate());

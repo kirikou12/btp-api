@@ -21,7 +21,7 @@ import java.util.Map;
 @Service
 public class ReportService {
 
-    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
+    private static final List<InvoiceType> USAGE_INVOICE_TYPES = List.of(InvoiceType.SUPPLY_USAGE, InvoiceType.SUPPLY_EXCHANGE, InvoiceType.DIRECT_USAGE, InvoiceType.DIRECT_EXPENSE);
 
     private final ReferenceDataService referenceDataService;
     private final SupplierInvoiceItemRepository invoiceItemRepository;
@@ -93,7 +93,7 @@ public class ReportService {
             BigDecimal exchanged = invoiceRepository.sumExchangeTotalBySourceInvoiceId(invoice.getId(), null);
             rows.merge(
                     invoice.getSupplier().getId(),
-                    new ReportDtos.SupplierBalanceRow(invoice.getSupplier().getId(), invoice.getSupplier().getName(), invoice.getTotalAmount(), consumed, invoice.getTotalAmount().subtract(outgoing).subtract(exchanged)),
+                    new ReportDtos.SupplierBalanceRow(invoice.getSupplier().getId(), invoice.getSupplier().getName(), invoice.getTotalAmount(), consumed.add(exchanged), invoice.getTotalAmount().subtract(outgoing).subtract(exchanged)),
                     (left, right) -> new ReportDtos.SupplierBalanceRow(
                             left.supplierId(),
                             left.supplierName(),
@@ -163,6 +163,9 @@ public class ReportService {
         if (invoice.getInvoiceType() == InvoiceType.DIRECT_USAGE) {
             return "DIRECT_USAGE";
         }
+        if (invoice.getInvoiceType() == InvoiceType.SUPPLY_EXCHANGE) {
+            return "SUPPLY_EXCHANGE";
+        }
         return "USAGE_INVOICE";
     }
 
@@ -172,6 +175,9 @@ public class ReportService {
         }
         if (invoice.getInvoiceType() == InvoiceType.DIRECT_USAGE) {
             return "Direct usage invoice";
+        }
+        if (invoice.getInvoiceType() == InvoiceType.SUPPLY_EXCHANGE) {
+            return "Stock exchange";
         }
         return "Usage invoice";
     }
