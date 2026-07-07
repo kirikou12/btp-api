@@ -1,6 +1,9 @@
 package mr.btp.api.project;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import mr.btp.api.settings.AppSettingsDtos;
+import mr.btp.api.settings.AppSettingsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -17,12 +20,13 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@WithMockUser
+@WithMockUser(roles = "ADMIN")
 @TestPropertySource(properties = "app.project.stage.max-in-progress-per-project=2")
 class ProjectStageValidationTest {
 
@@ -37,6 +41,14 @@ class ProjectStageValidationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private AppSettingsService appSettingsService;
+
+    @BeforeEach
+    void resetSettings() {
+        appSettingsService.update(new AppSettingsDtos.AppSettingsRequest(2));
+    }
 
     @Test
     void shouldFailWhenCreatingStageWithDuplicateName() throws Exception {
@@ -182,6 +194,53 @@ class ProjectStageValidationTest {
 
         ConstructionStage reloaded = stageRepository.findById(pendingStage.getId()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(StageStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void shouldApplyUpdatedInProgressStageLimitFromSettings() throws Exception {
+        Project project = createProject("Test Project Runtime In Progress Limit");
+        createStage(project, "Stage 1", StageStatus.IN_PROGRESS, 1);
+        createStage(project, "Stage 2", StageStatus.IN_PROGRESS, 2);
+        ConstructionStage pendingStage = createStage(project, "Stage 3", StageStatus.NOT_STARTED, 3);
+
+        mockMvc.perform(put("/api/settings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"projectStageMaxInProgressPerProject":3}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projectStageMaxInProgressPerProject").value(3));
+
+        mockMvc.perform(put("/api/project-stages/" + pendingStage.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"IN_PROGRESS"}
+                        """))
+                .andExpect(status().isOk());
+
+        ConstructionStage reloaded = stageRepository.findById(pendingStage.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(StageStatus.IN_PROGRESS);
+    }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    void shouldRejectSettingsUpdateForManager() throws Exception {
+        mockMvc.perform(put("/api/settings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"projectStageMaxInProgressPerProject":3}
+                        """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldRejectInvalidInProgressStageLimitSetting() throws Exception {
+        mockMvc.perform(put("/api/settings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"projectStageMaxInProgressPerProject":0}
+                        """))
+                .andExpect(status().isBadRequest());
     }
 
     private Project createProject(String name) {

@@ -7,7 +7,7 @@ import java.util.List;
 import mr.btp.api.common.exception.ApiException;
 import mr.btp.api.common.i18n.MessageKey;
 import mr.btp.api.common.service.ReferenceDataService;
-import org.springframework.beans.factory.annotation.Value;
+import mr.btp.api.settings.AppSettingsService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -20,16 +20,16 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final ConstructionStageRepository stageRepository;
     private final ReferenceDataService referenceDataService;
-    private final int maxInProgressStagesPerProject;
+    private final AppSettingsService appSettingsService;
 
     public ProjectService(ProjectRepository projectRepository,
                           ConstructionStageRepository stageRepository,
                           ReferenceDataService referenceDataService,
-                          @Value("${app.project.stage.max-in-progress-per-project:6}") int maxInProgressStagesPerProject) {
+                          AppSettingsService appSettingsService) {
         this.projectRepository = projectRepository;
         this.stageRepository = stageRepository;
         this.referenceDataService = referenceDataService;
-        this.maxInProgressStagesPerProject = maxInProgressStagesPerProject;
+        this.appSettingsService = appSettingsService;
     }
 
     @Transactional(readOnly = true)
@@ -187,6 +187,7 @@ public class ProjectService {
             return;
         }
 
+        int maxInProgressStagesPerProject = appSettingsService.getProjectStageMaxInProgressPerProject();
         long inProgressStages = stageRepository.countByProjectIdAndStatus(stage.getProject().getId(), StageStatus.IN_PROGRESS);
         if (inProgressStages >= maxInProgressStagesPerProject) {
             throw new ApiException(
