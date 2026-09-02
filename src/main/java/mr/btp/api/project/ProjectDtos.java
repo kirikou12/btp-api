@@ -68,6 +68,7 @@ public final class ProjectDtos {
             BigDecimal plannedBudget,
             BigDecimal actualCost,
             Integer progressPercent,
+            boolean excludedFromProjectStats,
             boolean deletable
     ) {
     }

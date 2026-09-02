@@ -17,6 +17,7 @@ public interface WorkerPaymentRepository extends JpaRepository<WorkerPayment, Lo
             select coalesce(sum(payment.amount), 0)
             from WorkerPayment payment
             where (:projectId is null or payment.stage.project.id = :projectId)
+              and payment.stage.excludedFromProjectStats = false
             """)
     BigDecimal sumAmountByProjectId(@Param("projectId") Long projectId);
 
@@ -24,6 +25,7 @@ public interface WorkerPaymentRepository extends JpaRepository<WorkerPayment, Lo
             select payment.stage.project.id as projectId,
                    coalesce(sum(payment.amount), 0) as totalAmount
             from WorkerPayment payment
+            where payment.stage.excludedFromProjectStats = false
             group by payment.stage.project.id
             """)
     List<ProjectWorkerPaymentTotal> sumAmountsByProject();
@@ -33,6 +35,7 @@ public interface WorkerPaymentRepository extends JpaRepository<WorkerPayment, Lo
                    coalesce(sum(payment.amount), 0) as totalAmount
             from WorkerPayment payment
             where payment.stage.project.id = :projectId
+              and payment.stage.excludedFromProjectStats = false
             group by payment.stage.id
             """)
     List<StageWorkerPaymentTotal> sumAmountsByStageForProject(@Param("projectId") Long projectId);
@@ -49,6 +52,7 @@ public interface WorkerPaymentRepository extends JpaRepository<WorkerPayment, Lo
                    coalesce(sum(payment.amount), 0) as totalAmount
             from WorkerPayment payment
             where payment.worker.id in :workerIds
+              and payment.stage.excludedFromProjectStats = false
             group by payment.worker.id
             """)
     List<WorkerPaymentTotal> sumAmountsByWorkerIds(@Param("workerIds") Collection<Long> workerIds);
@@ -58,6 +62,7 @@ public interface WorkerPaymentRepository extends JpaRepository<WorkerPayment, Lo
                    coalesce(sum(payment.amount), 0) as totalAmount
             from WorkerPayment payment
             where payment.stage.project.id = :projectId
+              and payment.stage.excludedFromProjectStats = false
             group by payment.worker.type
             """)
     List<WorkerTypePaymentTotal> sumAmountsByWorkerTypeForProject(@Param("projectId") Long projectId);

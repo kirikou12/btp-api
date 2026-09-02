@@ -60,6 +60,7 @@ public interface SupplierInvoiceItemRepository extends JpaRepository<SupplierInv
             join item.invoice invoice
             where invoice.invoiceType in :invoiceTypes
               and (:projectId is null or invoice.project.id = :projectId)
+              and (invoice.stage is null or invoice.stage.excludedFromProjectStats = false)
             group by item.category.type
             """)
     List<CategoryTypeTotal> sumUsageTotalsByCategoryType(@Param("projectId") Long projectId,
@@ -73,6 +74,7 @@ public interface SupplierInvoiceItemRepository extends JpaRepository<SupplierInv
             join item.invoice invoice
             where invoice.invoiceType in :invoiceTypes
               and invoice.project is not null
+              and (invoice.stage is null or invoice.stage.excludedFromProjectStats = false)
             group by invoice.project.id, item.category.type
             """)
     List<ProjectCategoryTypeTotal> sumUsageTotalsByProjectAndCategoryType(@Param("invoiceTypes") Collection<InvoiceType> invoiceTypes);
@@ -84,6 +86,7 @@ public interface SupplierInvoiceItemRepository extends JpaRepository<SupplierInv
             join item.invoice invoice
             where invoice.project.id = :projectId
               and invoice.stage is not null
+              and invoice.stage.excludedFromProjectStats = false
               and invoice.invoiceType in :invoiceTypes
             group by invoice.stage.id
             """)
@@ -98,6 +101,7 @@ public interface SupplierInvoiceItemRepository extends JpaRepository<SupplierInv
             join item.invoice invoice
             where invoice.project.id = :projectId
               and invoice.invoiceType in :invoiceTypes
+              and (invoice.stage is null or invoice.stage.excludedFromProjectStats = false)
             group by item.category.id, item.category.name
             """)
     List<CategoryCostTotal> sumUsageTotalsByCategory(@Param("projectId") Long projectId,

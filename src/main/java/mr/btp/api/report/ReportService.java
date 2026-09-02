@@ -41,13 +41,16 @@ public class ReportService {
     @Transactional(readOnly = true)
     public List<ReportDtos.StageCostRow> stageCosts(Long projectId) {
         Map<Long, BigDecimal> totals = new LinkedHashMap<>();
-        referenceDataService.stagesByProject(projectId).forEach(stage -> totals.put(stage.getId(), BigDecimal.ZERO));
+        referenceDataService.stagesByProject(projectId).stream()
+                .filter(stage -> !stage.isExcludedFromProjectStats())
+                .forEach(stage -> totals.put(stage.getId(), BigDecimal.ZERO));
         invoiceItemRepository.sumUsageTotalsByStage(projectId, usageInvoiceTypes()).forEach(row ->
                 totals.computeIfPresent(row.getStageId(), (key, value) -> value.add(row.getTotalAmount())));
         workerPaymentRepository.sumAmountsByStageForProject(projectId).forEach(row ->
                 totals.computeIfPresent(row.getStageId(), (key, value) -> value.add(row.getTotalAmount())));
         return referenceDataService.stagesByProject(projectId).stream()
-                .map(stage -> new ReportDtos.StageCostRow(stage.getId(), stage.getName(), totals.getOrDefault(stage.getId(), BigDecimal.ZERO)))
+                .filter(stage -> !stage.isExcludedFromProjectStats())
+                .map(stage -> new ReportDtos.StageCostRow(stage.getId(), stage.getName(), totals.getOrDefault(stage.getId(), BigDecimal.ZERO), stage.isExcludedFromProjectStats()))
                 .toList();
     }
 

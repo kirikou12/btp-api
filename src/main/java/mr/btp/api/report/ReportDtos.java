@@ -8,7 +8,7 @@ public final class ReportDtos {
     private ReportDtos() {
     }
 
-    public record StageCostRow(Long stageId, String stageName, BigDecimal totalCost) {
+    public record StageCostRow(Long stageId, String stageName, BigDecimal totalCost, boolean excludedFromProjectStats) {
     }
 
     public record CategoryCostRow(Long categoryId, String categoryName, BigDecimal totalCost) {

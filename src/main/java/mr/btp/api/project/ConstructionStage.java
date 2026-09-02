@@ -42,6 +42,9 @@ public class ConstructionStage extends BaseEntity {
     @Column(name = "progress_percent", nullable = false)
     private Integer progressPercent = 0;
 
+    @Column(name = "excluded_from_project_stats", nullable = false)
+    private boolean excludedFromProjectStats = false;
+
     public Project getProject() {
         return project;
     }
@@ -104,5 +107,13 @@ public class ConstructionStage extends BaseEntity {
 
     public void setProgressPercent(Integer progressPercent) {
         this.progressPercent = progressPercent;
+    }
+
+    public boolean isExcludedFromProjectStats() {
+        return excludedFromProjectStats;
+    }
+
+    public void setExcludedFromProjectStats(boolean excludedFromProjectStats) {
+        this.excludedFromProjectStats = excludedFromProjectStats;
     }
 }

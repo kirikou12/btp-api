@@ -90,6 +90,7 @@ public class ProjectService {
         stage.setStatus(StageStatus.NOT_STARTED);
         stage.setPlannedBudget(request.plannedBudget());
         stage.setProgressPercent(0);
+        stage.setExcludedFromProjectStats(false);
         return toStageResponse(stageRepository.save(stage));
     }
 
@@ -157,6 +158,12 @@ public class ProjectService {
         stage.setStartDate(nextStartDate);
         stage.setEndDate(nextEndDate);
         stage.setPlannedBudget(nextPlannedBudget);
+        if (hasNonNull(request, "excludedFromProjectStats")) {
+            if (!request.get("excludedFromProjectStats").isBoolean()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "error.project.stage.excluded-from-stats.boolean", "Stage stats exclusion must be boolean");
+            }
+            stage.setExcludedFromProjectStats(request.get("excludedFromProjectStats").asBoolean());
+        }
 
         if (nextStatus == StageStatus.NOT_STARTED) {
             stage.setProgressPercent(0);
@@ -310,6 +317,7 @@ public class ProjectService {
                 stage.getPlannedBudget(),
                 referenceDataService.stageActualCost(stage.getId()),
                 stage.getProgressPercent(),
+                stage.isExcludedFromProjectStats(),
                 referenceDataService.isStageDeletable(stage.getId())
         );
     }
